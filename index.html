@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js para reatividade e estado da aplicação -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <!-- Supabase Client JS para integração com o banco de dados -->
+    <!-- Supabase Client JS para integração opcional com o banco de dados -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         [x-cloak] { display: none !important; }
@@ -278,12 +278,12 @@
                                     <template x-for="dev in filteredDevices" :key="dev.id">
                                         <tr class="border-b border-slate-800 hover:bg-slate-900 transition">
                                             <td class="p-3 font-semibold text-white" x-text="dev.name"></td>
-                                            <td class="p-3 font-mono text-cyan-400" x-text="dev.ip"></td>
-                                            <td class="p-3" x-text="'VLAN ' + dev.vlanId"></td>
+                                            <td class="p-3 font-mono text-cyan-400" x-text="dev.ip || 'Sem IP'"></td>
+                                            <td class="p-3" x-text="dev.vlanId ? 'VLAN ' + dev.vlanId : 'Nenhuma'"></td>
                                             <td class="p-3">
                                                 <span class="bg-slate-800 text-slate-300 px-2 py-1 rounded text-xs font-mono" x-text="dev.switchName ? dev.switchName + ' [P: ' + dev.port + ']' : 'Desconectado'"></span>
                                             </td>
-                                            <td class="p-3 text-amber-400 font-bold" x-text="dev.outlet"></td>
+                                            <td class="p-3 text-amber-400 font-bold" x-text="dev.outlet || 'S/ Ponto'"></td>
                                         </tr>
                                     </template>
                                     <tr x-show="filteredDevices.length === 0">
@@ -433,9 +433,9 @@
                                                 <td class="p-2.5 font-mono text-slate-500 truncate max-w-[200px]" x-text="item.rawLine"></td>
                                                 <td class="p-2.5">
                                                     <strong class="text-white" x-text="item.data.name"></strong> | 
-                                                    <span class="text-cyan-400 font-mono" x-text="item.data.ip"></span>
+                                                    <span class="text-cyan-400 font-mono" x-text="item.data.ip || 'Sem IP'"></span>
                                                     <div class="text-[10px] text-slate-400">
-                                                        Switch: <span x-text="item.data.switchName || 'N/A'"></span> | P: <span x-text="item.data.port || 'N/A'"></span> | Ponto: <span class="text-amber-400 font-bold" x-text="item.data.outlet"></span>
+                                                        Switch: <span x-text="item.data.switchName || 'N/A'"></span> | P: <span x-text="item.data.port || 'N/A'"></span> | Ponto: <span class="text-amber-400 font-bold" x-text="item.data.outlet || 'S/ Ponto'"></span>
                                                     </div>
                                                 </td>
                                                 <td class="p-2.5">
@@ -731,7 +731,7 @@
                 <div x-show="currentTab === 'ip'" class="space-y-6" x-cloak>
                     <div>
                         <h2 class="text-2xl font-bold text-white">Painel de IPs por VLAN (IPAM)</h2>
-                        <p class="text-xs text-slate-400 mt-1">Visualize e inspecione em tempo real todos os endereços IP de cada VLAN.</p>
+                        <p class="text-xs text-slate-400 mt-1">Visualize e inspecione em tempo real todos os endereços IP de cada VLAN (Faixa completa .1 a .254).</p>
                     </div>
 
                     <!-- Abas de seleção de VLAN -->
@@ -757,8 +757,9 @@
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 bg-slate-900 p-4 rounded-lg border border-slate-800">
-                                <template x-for="ipSuffix in 64" :key="ipSuffix">
+                            <!-- Grade responsiva preenchida dinamicamente via AlpineJS e CSS Inline Grid de auto-preenchimento -->
+                            <div class="grid gap-1.5 bg-slate-900 p-4 rounded-lg border border-slate-800 max-h-[400px] overflow-y-auto" style="grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));">
+                                <template x-for="ipSuffix in 254" :key="ipSuffix">
                                     <div @click="checkIpAssignment(selectedVlanId, ipSuffix)"
                                          :class="isIpUsed(selectedVlanId, ipSuffix) ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer font-bold' : 'bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 cursor-pointer'"
                                          class="h-10 rounded text-xs flex flex-col items-center justify-center transition p-1">
@@ -790,11 +791,11 @@
                                                 </div>
                                                 <div class="flex justify-between">
                                                     <span class="text-slate-400">Ponto Físico:</span>
-                                                    <span class="font-bold text-amber-400" x-text="getDeviceByIp(selectedIpBlock).outlet"></span>
+                                                    <span class="font-bold text-amber-400" x-text="getDeviceByIp(selectedIpBlock).outlet || 'Não definido'"></span>
                                                 </div>
                                                 <div class="flex justify-between">
                                                     <span class="text-slate-400">Switch:</span>
-                                                    <span class="font-semibold text-slate-300" x-text="getDeviceByIp(selectedIpBlock).switchName + ' - Porta ' + getDeviceByIp(selectedIpBlock).port"></span>
+                                                    <span class="font-semibold text-slate-300" x-text="getDeviceByIp(selectedIpBlock).switchName ? getDeviceByIp(selectedIpBlock).switchName + ' - Porta ' + getDeviceByIp(selectedIpBlock).port : 'Desconectado'"></span>
                                                 </div>
                                             </div>
                                         </template>
@@ -1185,7 +1186,7 @@
                                                 <td class="p-2.5 font-mono text-slate-500 truncate max-w-[200px]" x-text="item.rawLine"></td>
                                                 <td class="p-2.5">
                                                     <strong class="text-white" x-text="item.data.name"></strong> | 
-                                                    <span class="text-amber-400 font-medium" x-text="item.data.location"></span>
+                                                    <span class="text-amber-400 font-medium" x-text="item.data.location || 'Sem localização'"></span>
                                                     <div class="text-[10px] text-slate-400">
                                                         Conexão: <span x-text="item.data.switchName ? item.data.switchName + ' [P: ' + item.data.port + ']' : 'Nenhum'"></span> | Status: <span x-text="item.data.status"></span>
                                                     </div>
@@ -1246,7 +1247,7 @@
                                         </td>
                                         <td class="p-4">
                                             <template x-if="getDeviceByOutlet(outlet.name)">
-                                                <span class="text-cyan-400 font-semibold" x-text="getDeviceByOutlet(outlet.name).name + ' (' + getDeviceByOutlet(outlet.name).ip + ')'"></span>
+                                                <span class="text-cyan-400 font-semibold" x-text="getDeviceByOutlet(outlet.name).name + ' (' + (getDeviceByOutlet(outlet.name).ip || 'Sem IP') + ')'"></span>
                                             </template>
                                             <template x-if="!getDeviceByOutlet(outlet.name)">
                                                 <span class="text-slate-500 text-xs italic">Nenhum dispositivo ativo</span>
@@ -1865,6 +1866,15 @@
                     } else {
                         this.loadDefaultDemoData();
                     }
+
+                    // Garantia absoluta de usuários padrões caso estejam ausentes no cache local
+                    if (!this.users || this.users.length === 0) {
+                        this.users = [
+                            { id: 1, username: "admin", password: "admin", role: "admin" },
+                            { id: 2, username: "leitor", password: "123", role: "read" }
+                        ];
+                        this.saveUsers();
+                    }
                 },
 
                 loadDefaultDemoData() {
@@ -1900,7 +1910,7 @@
                     // Usuários Padrão
                     this.users = [
                         { id: 1, username: "admin", password: "admin", role: "admin" },
-                        { id: 2, username: "leitor", password: "leitor", role: "read" }
+                        { id: 2, username: "leitor", password: "123", role: "read" }
                     ];
 
                     // Logs iniciais
@@ -1934,7 +1944,7 @@
                 },
 
                 login() {
-                    const match = this.users.find(u => u.username === this.loginForm.username && u.password === this.loginForm.password);
+                    const match = this.users.find(u => u.username.trim() === this.loginForm.username.trim() && u.password === this.loginForm.password);
                     if (match) {
                         this.currentUser = { id: match.id, username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
@@ -1952,15 +1962,6 @@
                     localStorage.removeItem('netmap_session');
                     this.currentUser = { id: null, username: '', role: 'read' };
                     this.isLoggedIn = false;
-                },
-
-                forceResetUsers() {
-                    this.users = [
-                        { id: 1, username: "admin", password: "admin", role: "admin" },
-                        { id: 2, username: "leitor", password: "leitor", role: "read" }
-                    ];
-                    this.saveUsers();
-                    this.addToast('Usuários padrão restaurados (admin/admin e leitor/leitor)!', 'success');
                 },
 
                 // Toasts e Modais de Confirmação
@@ -2003,16 +2004,18 @@
                     this.saveLogs();
                 },
 
-                // Filtros de Pesquisa Ativos e Computados
+                // Filtros de Pesquisa Ativos e Computados (Busca Global Otimizada e Completa)
                 get filteredDevices() {
                     if (!this.searchQuery) return [];
                     const q = this.searchQuery.toLowerCase().trim();
-                    return this.devices.filter(d => 
-                        (d.name && d.name.toLowerCase().includes(q)) ||
-                        (d.ip && d.ip.includes(q)) ||
-                        (d.outlet && d.outlet.toLowerCase().includes(q)) ||
-                        (d.switchName && d.switchName.toLowerCase().includes(q))
-                    );
+                    return this.devices.filter(d => {
+                        const nameMatch = d.name && d.name.toLowerCase().includes(q);
+                        const ipMatch = d.ip && d.ip.includes(q);
+                        const outletMatch = d.outlet && d.outlet.toLowerCase().includes(q);
+                        const switchMatch = d.switchName && d.switchName.toLowerCase().includes(q);
+                        const vlanMatch = d.vlanId && (String(d.vlanId) === q || this.getVlanName(d.vlanId).toLowerCase().includes(q));
+                        return nameMatch || ipMatch || outletMatch || switchMatch || vlanMatch;
+                    });
                 },
 
                 get filteredDevicesList() {
@@ -2025,11 +2028,14 @@
                     }
                     if (this.searchQuery) {
                         const q = this.searchQuery.toLowerCase().trim();
-                        list = list.filter(d => 
-                            (d.name && d.name.toLowerCase().includes(q)) ||
-                            (d.ip && d.ip.includes(q)) ||
-                            (d.outlet && d.outlet.toLowerCase().includes(q))
-                        );
+                        list = list.filter(d => {
+                            const nameMatch = d.name && d.name.toLowerCase().includes(q);
+                            const ipMatch = d.ip && d.ip.includes(q);
+                            const outletMatch = d.outlet && d.outlet.toLowerCase().includes(q);
+                            const switchMatch = d.switchName && d.switchName.toLowerCase().includes(q);
+                            const vlanMatch = d.vlanId && (String(d.vlanId) === q || this.getVlanName(d.vlanId).toLowerCase().includes(q));
+                            return nameMatch || ipMatch || outletMatch || switchMatch || vlanMatch;
+                        });
                     }
                     return list;
                 },
@@ -2048,7 +2054,16 @@
                     return match ? match.gateway : 'N/A';
                 },
                 vlanIpsUsedCount(vlanId) {
-                    return this.devices.filter(d => d.vlanId === parseInt(vlanId) && d.ip).length;
+                    if (!vlanId) return 0;
+                    const subnet = this.getVlanSubnet(vlanId);
+                    if (!subnet || subnet === 'N/A') return 0;
+                    const cleanSubnet = subnet.split('/')[0].trim();
+                    const prefix = cleanSubnet.split('.').slice(0, 3).join('.');
+                    return this.devices.filter(d => {
+                        if (!d.ip) return false;
+                        const devicePrefix = d.ip.trim().split('.').slice(0, 3).join('.');
+                        return devicePrefix === prefix;
+                    }).length;
                 },
 
                 // Lógica IPAM (Gerenciamento de IPs)
@@ -2056,30 +2071,29 @@
                     if (!vlanId) return false;
                     const subnet = this.getVlanSubnet(vlanId);
                     if (!subnet || subnet === 'N/A') return false;
-                    const prefix = subnet.split('.').slice(0, 3).join('.');
+                    
+                    const cleanSubnet = subnet.split('/')[0].trim();
+                    const parts = cleanSubnet.split('.');
+                    if (parts.length < 3) return false;
+                    const prefix = parts.slice(0, 3).join('.');
                     const fullIp = `${prefix}.${suffix}`;
-                    return this.devices.some(d => d.ip && d.ip.trim() === fullIp.trim());
+                    
+                    return this.devices.some(d => d.ip && d.ip.trim() === fullIp);
                 },
 
                 checkIpAssignment(vlanId, suffix) {
                     if (!vlanId) return;
                     const subnet = this.getVlanSubnet(vlanId);
                     if (!subnet || subnet === 'N/A') return;
-                    const prefix = subnet.split('.').slice(0, 3).join('.');
+                    
+                    const cleanSubnet = subnet.split('/')[0].trim();
+                    const prefix = cleanSubnet.split('.').slice(0, 3).join('.');
                     this.selectedIpBlock = `${prefix}.${suffix}`;
                 },
 
                 getDeviceByIp(ip) {
+                    if (!ip) return null;
                     return this.devices.find(d => d.ip && d.ip.trim() === ip.trim());
-                },
-
-                checkIpAssignment(vlanId, suffix) {
-                    const prefix = this.getVlanSubnet(vlanId).split('.').slice(0, 3).join('.');
-                    this.selectedIpBlock = `${prefix}.${suffix}`;
-                },
-
-                getDeviceByIp(ip) {
-                    return this.devices.find(d => d.ip === ip);
                 },
 
                 // Tomadas / Pontos Físicos
@@ -2087,7 +2101,8 @@
                     return this.outlets.length;
                 },
                 getDeviceByOutlet(outletName) {
-                    return this.devices.find(d => d.outlet === outletName);
+                    if (!outletName) return null;
+                    return this.devices.find(d => d.outlet && d.outlet.trim().toLowerCase() === outletName.trim().toLowerCase());
                 },
 
                 // Lógica de Switches
@@ -2130,7 +2145,7 @@
                         const prevPort = dev.port;
                         dev.switchName = '';
                         dev.port = null;
-                        this.devices = [...this.devices]; // Força atualização reativa
+                        this.devices = [...this.devices]; // Força atualização reativa imediata do AlpineJS
                         this.saveDevices();
                         this.addLog('UPDATE', `Desconectou ${dev.name} da porta ${prevPort} do switch ${swName}.`);
                         this.addToast('Dispositivo desconectado com sucesso!', 'success');
@@ -2196,6 +2211,7 @@
                         totalIps: 254
                     };
                     this.vlans.push(newVlan);
+                    this.vlans = [...this.vlans]; // Garantia de Reatividade
                     this.saveVlans();
                     this.addLog('CREATE', `Criou VLAN ${newVlan.id} - ${newVlan.name}`);
                     this.addToast('VLAN cadastrada!', 'success');
@@ -2217,6 +2233,7 @@
                         status: this.outletForm.status
                     };
                     this.outlets.push(newOutlet);
+                    this.outlets = [...this.outlets]; // Garantia de Reatividade
                     this.saveOutlets();
                     this.addLog('CREATE', `Cadastrou Tomada ${newOutlet.name}.`);
                     this.addToast('Tomada cadastrada!', 'success');
@@ -2232,6 +2249,7 @@
                         o.switchName = this.editOutletForm.switchName || '';
                         o.port = this.editOutletForm.port ? parseInt(this.editOutletForm.port) : null;
                         o.status = this.editOutletForm.status;
+                        this.outlets = [...this.outlets]; // Garantia de Reatividade
                         this.saveOutlets();
                         this.addLog('UPDATE', `Editou Tomada ${o.name}.`);
                         this.addToast('Tomada atualizada!', 'success');
@@ -2243,10 +2261,22 @@
                     if (this.currentUser.role === 'read') return;
                     const sw = this.switches.find(s => s.id === this.editSwitchForm.id);
                     if (sw) {
+                        const oldName = sw.name;
                         sw.name = this.editSwitchForm.name.trim();
                         sw.model = this.editSwitchForm.model.trim();
                         sw.totalPorts = parseInt(this.editSwitchForm.totalPorts);
                         sw.location = this.editSwitchForm.location.trim();
+                        
+                        // Atualização em cascata nas conexões de rede das máquinas caso o nome do Switch mude
+                        if (oldName !== sw.name) {
+                            this.devices.forEach(d => {
+                                if (d.switchName === oldName) d.switchName = sw.name;
+                            });
+                            this.devices = [...this.devices];
+                            this.saveDevices();
+                        }
+
+                        this.switches = [...this.switches]; // Garantia de Reatividade
                         this.saveSwitches();
                         this.addLog('UPDATE', `Editou Switch ${sw.name}.`);
                         this.addToast('Switch atualizado!', 'success');
@@ -2266,6 +2296,7 @@
                         role: this.userForm.role
                     };
                     this.users.push(newUser);
+                    this.users = [...this.users]; // Garantia de Reatividade
                     this.saveUsers();
                     this.addLog('CREATE', `Criou usuário ${newUser.username}.`);
                     this.addToast('Usuário cadastrado com sucesso!', 'success');
@@ -2299,6 +2330,7 @@
                             if (d.vlanId === vlan.id) d.vlanId = null;
                         });
                         this.saveVlans();
+                        this.devices = [...this.devices]; // Força Reatividade do IPAM e Tabela
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu VLAN ${vlan.id}.`);
                         this.addToast('VLAN excluída.', 'success');
@@ -2317,6 +2349,7 @@
                             }
                         });
                         this.saveSwitches();
+                        this.devices = [...this.devices]; // Força Reatividade
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu Switch ${sw.name}.`);
                         this.addToast('Switch removido.', 'success');
@@ -2419,7 +2452,7 @@
                             let status = 'ready';
                             let errorMsg = '';
 
-                            if (itemData.ip && this.devices.some(d => d.ip === itemData.ip)) {
+                            if (itemData.ip && this.devices.some(d => d.ip && d.ip.trim() === itemData.ip.trim())) {
                                 status = 'warning';
                                 errorMsg = 'IP duplicado no parque ativo.';
                             }
@@ -2473,22 +2506,26 @@
                     if (type === 'devices') {
                         const newDev = { id: Date.now() + Math.random(), ...item.data };
                         this.devices.push(newDev);
+                        this.devices = [...this.devices]; // Força reatividade no IPAM
                         this.saveDevices();
                     } else if (type === 'vlans') {
                         const newVlan = { id: item.data.id, name: item.data.name, subnet: item.data.subnet, gateway: item.data.gateway, totalIps: 254 };
                         this.vlans.push(newVlan);
+                        this.vlans = [...this.vlans];
                         this.saveVlans();
                     } else if (type === 'switches') {
                         const newSwitch = { id: Date.now() + Math.random(), ...item.data };
                         this.switches.push(newSwitch);
+                        this.switches = [...this.switches];
                         this.saveSwitches();
                     } else if (type === 'outlets') {
                         const newOutlet = { id: Date.now() + Math.random(), ...item.data };
                         this.outlets.push(newOutlet);
+                        this.outlets = [...this.outlets];
                         this.saveOutlets();
                     }
                     this.parsedImportItems = this.parsedImportItems.filter(p => p.id !== item.id);
-                    this.addToast('Item importado!', 'success');
+                    this.addToast('Item importado com sucesso!', 'success');
                 },
 
                 importAllParsed(type) {
@@ -2504,10 +2541,21 @@
                         else if (type === 'switches') this.switches.push({ id: Date.now() + Math.random(), ...item.data });
                         else if (type === 'outlets') this.outlets.push({ id: Date.now() + Math.random(), ...item.data });
                     });
-                    if (type === 'devices') this.saveDevices();
-                    else if (type === 'vlans') this.saveVlans();
-                    else if (type === 'switches') this.saveSwitches();
-                    else if (type === 'outlets') this.saveOutlets();
+                    
+                    // Substituição de referências de array para garantir reatividade total nas abas correspondentes
+                    if (type === 'devices') {
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                    } else if (type === 'vlans') {
+                        this.vlans = [...this.vlans];
+                        this.saveVlans();
+                    } else if (type === 'switches') {
+                        this.switches = [...this.switches];
+                        this.saveSwitches();
+                    } else if (type === 'outlets') {
+                        this.outlets = [...this.outlets];
+                        this.saveOutlets();
+                    }
 
                     this.resetCsvImportState();
                     this.localImportPanel = null;
@@ -2604,6 +2652,14 @@
                         if (users) this.users = users;
                         if (logs) this.logs = logs;
 
+                        // Forçar reatividade geral substituindo as matrizes na memória do AlpineJS
+                        this.vlans = [...this.vlans];
+                        this.switches = [...this.switches];
+                        this.devices = [...this.devices];
+                        this.outlets = [...this.outlets];
+                        this.users = [...this.users];
+                        this.logs = [...this.logs];
+
                         this.saveVlans();
                         this.saveSwitches();
                         this.saveDevices();
@@ -2647,17 +2703,16 @@
                     }
                 },
 
-                // Implementação final das ações restantes de computadores
                 submitDeviceForm() {
                     if (this.currentUser.role === 'read') return;
 
                     if (this.deviceForm.ip && this.deviceForm.ip.trim() !== '') {
                         const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-                        if (!ipRegex.test(this.deviceForm.ip)) {
+                        if (!ipRegex.test(this.deviceForm.ip.trim())) {
                             this.addToast('Formato de endereço IP inválido.', 'error');
                             return;
                         }
-                        if (this.devices.some(d => d.ip === this.deviceForm.ip.trim())) {
+                        if (this.devices.some(d => d.ip && d.ip.trim() === this.deviceForm.ip.trim())) {
                             this.addToast('Este endereço IP já está em uso.', 'error');
                             return;
                         }
@@ -2689,7 +2744,7 @@
                     };
 
                     this.devices.push(newDevice);
-                    this.devices = [...this.devices]; // Força atualização reativa
+                    this.devices = [...this.devices]; // Força reatividade instantânea no AlpineJS e no IPAM
                     this.saveDevices();
                     this.addLog('CREATE', `Cadastrou o computador: ${newDevice.name}`);
                     this.addToast('Dispositivo cadastrado com sucesso!', 'success');
@@ -2701,11 +2756,11 @@
 
                     if (this.editDeviceForm.ip && this.editDeviceForm.ip.trim() !== '') {
                         const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
-                        if (!ipRegex.test(this.editDeviceForm.ip)) {
+                        if (!ipRegex.test(this.editDeviceForm.ip.trim())) {
                             this.addToast('Formato de endereço IP inválido.', 'error');
                             return;
                         }
-                        if (this.devices.some(d => d.ip === this.editDeviceForm.ip.trim() && d.id !== this.editDeviceForm.id)) {
+                        if (this.devices.some(d => d.ip && d.ip.trim() === this.editDeviceForm.ip.trim() && d.id !== this.editDeviceForm.id)) {
                             this.addToast('Este endereço IP já está em uso.', 'error');
                             return;
                         }
@@ -2735,7 +2790,7 @@
                         device.port = this.editDeviceForm.port ? parseInt(this.editDeviceForm.port) : null;
                         device.outlet = this.editDeviceForm.outlet.trim() || '';
 
-                        this.devices = [...this.devices]; // Força atualização reativa
+                        this.devices = [...this.devices]; // Força reatividade instantânea no AlpineJS e no IPAM
                         this.saveDevices();
                         this.addLog('UPDATE', `Editou o computador: ${device.name}`);
                         this.addToast('Dispositivo atualizado com sucesso!', 'success');
@@ -2765,6 +2820,7 @@
                     };
 
                     this.switches.push(newSwitch);
+                    this.switches = [...this.switches]; // Garantia de Reatividade
                     this.saveSwitches();
                     this.addLog('CREATE', `Adicionou o switch: ${newSwitch.name}`);
                     this.addToast('Switch adicionado!', 'success');
