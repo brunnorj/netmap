@@ -30,6 +30,7 @@
 </head>
 <body class="bg-slate-900 text-slate-100 font-sans min-h-screen" x-data="netMapApp()" x-init="initSystem()">
 
+    <!-- -->
     <!-- Sistema de Toasts (Notificações Flutuantes) -->
     <div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2">
         <template x-for="toast in toasts" :key="toast.id">
@@ -56,6 +57,7 @@
         </div>
     </div>
 
+    <!-- -->
     <!-- Tela de Autenticação -->
     <div x-show="!isLoggedIn" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950 p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-6">
@@ -89,9 +91,17 @@
                     Entrar no Sistema
                 </button>
             </form>
+            
+            <!-- Botão de Recuperação de Emergência para restauração de senhas locais -->
+            <div class="pt-4 border-t border-slate-800/60 text-center">
+                <button @click="restoreDefaultCredentials()" class="text-[11px] text-slate-500 hover:text-slate-300 underline font-mono tracking-wide">
+                    Restaurar Usuários Padrão
+                </button>
+            </div>
         </div>
     </div>
 
+    <!-- -->
     <!-- Corpo Principal do Sistema -->
     <div class="flex h-screen overflow-hidden" x-show="isLoggedIn" x-cloak>
         
@@ -106,7 +116,7 @@
                     <p class="text-xs text-slate-400 mt-1">Gestão de Parque de Redes</p>
                 </div>
 
-                <!-- Menu de Navegação -->
+                <!-- Menu de Navegação Reestruturado -->
                 <nav class="p-4 space-y-1.5">
                     <button @click="changeTab('dashboard')" :class="currentTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
                         <span>📊</span> Dashboard Geral
@@ -185,6 +195,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: Dashboard Geral -->
                 <div x-show="currentTab === 'dashboard'" class="space-y-6">
                     <div class="flex justify-between items-center">
@@ -227,7 +238,7 @@
                     <!-- Mapeamento de IPs por VLAN -->
                     <div class="bg-slate-950 p-6 rounded-xl border border-slate-800">
                         <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                            <span>📊</span> Visão Geral de IPs Utilizados por VLAN
+                            <span>📊</span> Visão Geral de IPs Utilizados por VLAN (Respeitando Máscara/CIDR)
                         </h3>
                         <div class="space-y-4">
                             <template x-for="vlan in vlans" :key="vlan.id">
@@ -238,16 +249,16 @@
                                             <span class="text-xs text-slate-500 font-mono" x-text="'Subrede: ' + vlan.subnet"></span>
                                         </div>
                                         <div class="text-xs text-slate-300 font-mono">
-                                            <span x-text="vlanIpsUsedCount(vlan.id)" class="text-blue-400 font-bold"></span> / <span x-text="vlan.totalIps"></span> IPs Utilizados 
-                                            (<span x-text="Math.round((vlanIpsUsedCount(vlan.id) / vlan.totalIps) * 100) + '%'"></span>)
+                                            <span x-text="vlanIpsUsedCount(vlan.id)" class="text-blue-400 font-bold"></span> / <span x-text="getVlanIps(vlan.id).length"></span> IPs Utilizados 
+                                            (<span x-text="getVlanIps(vlan.id).length > 0 ? Math.round((vlanIpsUsedCount(vlan.id) / getVlanIps(vlan.id).length) * 100) : 0"></span>%)
                                         </div>
                                     </div>
                                     <div class="w-full bg-slate-800 h-3.5 rounded-full overflow-hidden flex border border-slate-700">
-                                        <div :style="'width: ' + ((vlanIpsUsedCount(vlan.id) / vlan.totalIps) * 100) + '%'" 
+                                        <div :style="'width: ' + (getVlanIps(vlan.id).length > 0 ? ((vlanIpsUsedCount(vlan.id) / getVlanIps(vlan.id).length) * 100) : 0) + '%'" 
                                              class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500"></div>
                                     </div>
                                     <div class="flex justify-between text-[11px] text-slate-500 mt-1 px-1">
-                                        <span x-text="'IPs Livres: ' + (vlan.totalIps - vlanIpsUsedCount(vlan.id))"></span>
+                                        <span x-text="'IPs Livres: ' + (getVlanIps(vlan.id).length - vlanIpsUsedCount(vlan.id))"></span>
                                         <span x-text="'Gateway: ' + vlan.gateway"></span>
                                     </div>
                                 </div>
@@ -295,6 +306,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: Computadores -->
                 <div x-show="currentTab === 'devices'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
@@ -542,6 +554,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: VLANs -->
                 <div x-show="currentTab === 'vlans'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
@@ -585,7 +598,7 @@
                                 <p class="font-bold text-white">Campos da VLAN:</p>
                                 <p>• ID (Numérico)</p>
                                 <p>• Nome (Texto descritivo)</p>
-                                <p>• Subrede (Ex: 192.168.10.0/24)</p>
+                                <p>• Subrede (Ex: 192.168.10.0/24 ou 192.168.10.0/26)</p>
                                 <p>• Gateway (Ex: 192.168.10.1)</p>
                             </div>
                         </div>
@@ -711,7 +724,7 @@
                                         <td class="p-4 font-mono text-slate-400" x-text="vlan.gateway"></td>
                                         <td class="p-4 text-center">
                                             <span class="bg-blue-950 text-blue-300 border border-blue-900/40 px-2.5 py-1 rounded-full text-xs font-semibold"
-                                                  x-text="vlanIpsUsedCount(vlan.id) + ' computadores'"></span>
+                                                  x-text="vlanIpsUsedCount(vlan.id) + ' / ' + getVlanIps(vlan.id).length + ' IPs'"></span>
                                         </td>
                                         <td class="p-4 text-right">
                                             <button @click="confirmDeleteVlan(vlan)" :disabled="currentUser.role === 'read'"
@@ -727,11 +740,12 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: IP (IPAM) -->
                 <div x-show="currentTab === 'ip'" class="space-y-6" x-cloak>
                     <div>
                         <h2 class="text-2xl font-bold text-white">Painel de IPs por VLAN (IPAM)</h2>
-                        <p class="text-xs text-slate-400 mt-1">Visualize e inspecione em tempo real todos os endereços IP de cada VLAN (Faixa completa .1 a .254).</p>
+                        <p class="text-xs text-slate-400 mt-1">Visualize e inspecione em tempo real todos os endereços IP de cada VLAN (Faixa autocalculada por CIDR).</p>
                     </div>
 
                     <!-- Abas de seleção de VLAN -->
@@ -757,13 +771,13 @@
                                 </div>
                             </div>
 
-                            <!-- Grade responsiva preenchida dinamicamente via AlpineJS e CSS Inline Grid de auto-preenchimento -->
-                            <div class="grid gap-1.5 bg-slate-900 p-4 rounded-lg border border-slate-800 max-h-[400px] overflow-y-auto" style="grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));">
-                                <template x-for="ipSuffix in 254" :key="ipSuffix">
-                                    <div @click="checkIpAssignment(selectedVlanId, ipSuffix)"
-                                         :class="isIpUsed(selectedVlanId, ipSuffix) ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer font-bold' : 'bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 cursor-pointer'"
+                            <!-- Grade de IPs auto-adaptável preenchida com a quantidade exata da máscara de subrede (ex: /28, /27, /26) -->
+                            <div class="grid gap-1.5 bg-slate-900 p-4 rounded-lg border border-slate-800 max-h-[400px] overflow-y-auto" style="grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));">
+                                <template x-for="ipObj in getVlanIps(selectedVlanId)" :key="ipObj.fullIp">
+                                    <div @click="checkIpAssignment(selectedVlanId, ipObj.fullIp)"
+                                         :class="isIpUsed(selectedVlanId, ipObj.fullIp) ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer font-bold' : 'bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 cursor-pointer'"
                                          class="h-10 rounded text-xs flex flex-col items-center justify-center transition p-1">
-                                        <span x-text="'.' + ipSuffix" class="font-mono"></span>
+                                        <span x-text="ipObj.label" class="font-mono text-[10px]"></span>
                                     </div>
                                 </template>
                             </div>
@@ -816,6 +830,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: Switch -->
                 <div x-show="currentTab === 'switch'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
@@ -1063,6 +1078,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: Pontos de Rede (Tomadas) -->
                 <div x-show="currentTab === 'outlets'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
@@ -1274,6 +1290,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: Configurações Nuvem -->
                 <div x-show="currentTab === 'cloud'" class="space-y-6" x-cloak>
                     <div>
@@ -1343,6 +1360,7 @@
                     </div>
                 </div>
 
+                <!-- -->
                 <!-- ABA: Usuários (Apenas Admin) -->
                 <div x-show="currentTab === 'users' && currentUser.role === 'admin'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
@@ -1440,6 +1458,7 @@
         </main>
     </div>
 
+    <!-- -->
     <!-- MODAL: Criar Usuário -->
     <div x-show="userModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative">
@@ -1603,7 +1622,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Subrede (CIDR)</label>
-                    <input type="text" x-model="vlanForm.subnet" required placeholder="Ex: 192.168.40.0/24" 
+                    <input type="text" x-model="vlanForm.subnet" required placeholder="Ex: 192.168.40.0/24 ou 192.168.40.0/26" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
@@ -1777,6 +1796,7 @@
         </div>
     </div>
 
+    <!-- -->
     <script>
         function netMapApp() {
             return {
@@ -1812,7 +1832,7 @@
                 // Estados de Formulários de Entrada
                 deviceForm: { name: '', ip: '', vlanId: '', switchName: '', port: '', outlet: '' },
                 editDeviceForm: { id: null, name: '', ip: '', vlanId: '', switchName: '', port: '', outlet: '' },
-                vlanForm: { id: '', name: '', subnet: '', gateway: '', totalIps: 254 },
+                vlanForm: { id: '', name: '', subnet: '', gateway: '' },
                 switchForm: { name: '', model: '', totalPorts: 24, location: '' },
                 editSwitchForm: { id: null, name: '', model: '', totalPorts: 24, location: '' },
                 outletForm: { name: '', location: '', switchName: '', port: '', status: 'Ativo' },
@@ -1841,7 +1861,6 @@
                 isCloudSyncActive: false,
                 supabaseClient: null,
 
-                // Inicialização Geral do Sistema
                 initSystem() {
                     this.restoreLocalDatabase();
                     this.checkActiveSession();
@@ -1878,11 +1897,11 @@
                 },
 
                 loadDefaultDemoData() {
-                    // VLANs de demonstração
+                    // VLANs de demonstração com diferentes máscaras de subrede calculadas dinamicamente
                     this.vlans = [
-                        { id: 10, name: "Administração", subnet: "192.168.10.0/24", gateway: "192.168.10.1", totalIps: 254 },
-                        { id: 20, name: "Produção", subnet: "192.168.20.0/24", gateway: "192.168.20.1", totalIps: 254 },
-                        { id: 30, name: "CFTV", subnet: "192.168.30.0/24", gateway: "192.168.30.1", totalIps: 254 }
+                        { id: 10, name: "Administração", subnet: "192.168.10.0/26", gateway: "192.168.10.1" }, // /26 (62 IPs utilizáveis)
+                        { id: 20, name: "Produção", subnet: "192.168.20.0/27", gateway: "192.168.20.1" },       // /27 (30 IPs utilizáveis)
+                        { id: 30, name: "CFTV", subnet: "192.168.30.0/28", gateway: "192.168.30.1" }            // /28 (14 IPs utilizáveis)
                     ];
 
                     // Switches de demonstração
@@ -1891,12 +1910,12 @@
                         { id: 2, name: "SW-02", model: "HP ProCurve 2530", totalPorts: 24, location: "Rack Bloco B" }
                     ];
 
-                    // Computadores/Dispositivos de demonstração
+                    // Computadores/Dispositivos de demonstração dentro das faixas das subredes
                     this.devices = [
                         { id: 101, name: "PC-FINANCEIRO-01", ip: "192.168.10.11", vlanId: 10, switchName: "SW-01", port: 5, outlet: "T-101" },
                         { id: 102, name: "PC-DIRETORIA-01", ip: "192.168.10.12", vlanId: 10, switchName: "SW-01", port: 8, outlet: "T-102" },
                         { id: 103, name: "PC-PROD-01", ip: "192.168.20.21", vlanId: 20, switchName: "SW-02", port: 3, outlet: "T-201" },
-                        { id: 104, name: "CAMERA-ENTRADA-01", ip: "192.168.30.50", vlanId: 30, switchName: "SW-01", port: 12, outlet: "C-01" }
+                        { id: 104, name: "CAMERA-ENTRADA-01", ip: "192.168.30.5", vlanId: 30, switchName: "SW-01", port: 12, outlet: "C-01" }
                     ];
 
                     // Tomadas Físicas de demonstração
@@ -1934,7 +1953,6 @@
                 saveUsers() { localStorage.setItem('netmap_users', JSON.stringify(this.users)); },
                 saveLogs() { localStorage.setItem('netmap_logs', JSON.stringify(this.logs)); },
 
-                // Fluxo de Autenticação de Usuários
                 checkActiveSession() {
                     const savedSession = localStorage.getItem('netmap_session');
                     if (savedSession) {
@@ -1962,6 +1980,15 @@
                     localStorage.removeItem('netmap_session');
                     this.currentUser = { id: null, username: '', role: 'read' };
                     this.isLoggedIn = false;
+                },
+
+                restoreDefaultCredentials() {
+                    this.users = [
+                        { id: 1, username: "admin", password: "admin", role: "admin" },
+                        { id: 2, username: "leitor", password: "123", role: "read" }
+                    ];
+                    this.saveUsers();
+                    this.addToast('Credenciais padrões de fábrica restauradas!', 'success');
                 },
 
                 // Toasts e Modais de Confirmação
@@ -2004,7 +2031,6 @@
                     this.saveLogs();
                 },
 
-                // Filtros de Pesquisa Ativos e Computados (Busca Global Otimizada e Completa)
                 get filteredDevices() {
                     if (!this.searchQuery) return [];
                     const q = this.searchQuery.toLowerCase().trim();
@@ -2053,42 +2079,81 @@
                     const match = this.vlans.find(v => v.id === parseInt(id));
                     return match ? match.gateway : 'N/A';
                 },
+
+                getVlanIps(vlanId) {
+                    const vlan = this.vlans.find(v => v.id === parseInt(vlanId));
+                    if (!vlan || !vlan.subnet) return [];
+
+                    const parts = vlan.subnet.split('/');
+                    const baseIp = parts[0].trim();
+                    const cidr = parts[1] ? parseInt(parts[1].trim(), 10) : 24;
+
+                    const ipBytes = baseIp.split('.').map(Number);
+                    if (ipBytes.length !== 4 || ipBytes.some(isNaN)) return [];
+
+                    // Converte IP base para inteiro de 32 bits não sinalizado
+                    const ipNum = ((ipBytes[0] << 24) >>> 0) + 
+                                  ((ipBytes[1] << 16) >>> 0) + 
+                                  ((ipBytes[2] << 8) >>> 0) + 
+                                  (ipBytes[3] >>> 0);
+
+                    // Cria máscara de subrede de acordo com o CIDR
+                    const mask = cidr === 0 ? 0 : (~0 << (32 - cidr)) >>> 0;
+
+                    const networkNum = (ipNum & mask) >>> 0;
+                    const broadcastNum = (networkNum | ~mask) >>> 0;
+
+                    // Omitir rede e broadcast padrão de hosts se CIDR for menor que 31
+                    let start = networkNum + 1;
+                    let end = broadcastNum - 1;
+
+                    if (cidr >= 31) {
+                        start = networkNum;
+                        end = broadcastNum;
+                    }
+
+                    const ipList = [];
+                    // Salvaguarda para não travar a visualização gráfica no navegador em subredes imensas (ex: /16)
+                    const maxIps = 1024;
+                    const totalToGenerate = Math.min(end - start + 1, maxIps);
+
+                    for (let i = 0; i < totalToGenerate; i++) {
+                        const currentIpNum = start + i;
+                        const octet1 = (currentIpNum >>> 24) & 255;
+                        const octet2 = (currentIpNum >>> 16) & 255;
+                        const octet3 = (currentIpNum >>> 8) & 255;
+                        const octet4 = currentIpNum & 255;
+                        const fullIp = `${octet1}.${octet2}.${octet3}.${octet4}`;
+
+                        // Para redes menores ou iguais a /24 mostra sufixo reduzido (.X), para maiores mostra octeto_3.octeto_4
+                        const label = cidr >= 24 ? `.${octet4}` : `${octet3}.${octet4}`;
+
+                        ipList.push({
+                            fullIp: fullIp,
+                            label: label
+                        });
+                    }
+                    return ipList;
+                },
+
                 vlanIpsUsedCount(vlanId) {
                     if (!vlanId) return 0;
-                    const subnet = this.getVlanSubnet(vlanId);
-                    if (!subnet || subnet === 'N/A') return 0;
-                    const cleanSubnet = subnet.split('/')[0].trim();
-                    const prefix = cleanSubnet.split('.').slice(0, 3).join('.');
-                    return this.devices.filter(d => {
-                        if (!d.ip) return false;
-                        const devicePrefix = d.ip.trim().split('.').slice(0, 3).join('.');
-                        return devicePrefix === prefix;
-                    }).length;
+                    const ips = this.getVlanIps(vlanId);
+                    if (ips.length === 0) return 0;
+                    
+                    const ipSet = new Set(ips.map(item => item.fullIp));
+                    return this.devices.filter(d => d.ip && ipSet.has(d.ip.trim())).length;
                 },
 
-                // Lógica IPAM (Gerenciamento de IPs)
-                isIpUsed(vlanId, suffix) {
-                    if (!vlanId) return false;
-                    const subnet = this.getVlanSubnet(vlanId);
-                    if (!subnet || subnet === 'N/A') return false;
-                    
-                    const cleanSubnet = subnet.split('/')[0].trim();
-                    const parts = cleanSubnet.split('.');
-                    if (parts.length < 3) return false;
-                    const prefix = parts.slice(0, 3).join('.');
-                    const fullIp = `${prefix}.${suffix}`;
-                    
-                    return this.devices.some(d => d.ip && d.ip.trim() === fullIp);
+                // Lógica IPAM (Gerenciamento de IPs por correspondência estrita de string de IP completo)
+                isIpUsed(vlanId, fullIp) {
+                    if (!vlanId || !fullIp) return false;
+                    return this.devices.some(d => d.ip && d.ip.trim() === fullIp.trim());
                 },
 
-                checkIpAssignment(vlanId, suffix) {
-                    if (!vlanId) return;
-                    const subnet = this.getVlanSubnet(vlanId);
-                    if (!subnet || subnet === 'N/A') return;
-                    
-                    const cleanSubnet = subnet.split('/')[0].trim();
-                    const prefix = cleanSubnet.split('.').slice(0, 3).join('.');
-                    this.selectedIpBlock = `${prefix}.${suffix}`;
+                checkIpAssignment(vlanId, fullIp) {
+                    if (!vlanId || !fullIp) return;
+                    this.selectedIpBlock = fullIp;
                 },
 
                 getDeviceByIp(ip) {
@@ -2168,7 +2233,7 @@
 
                 openVlanModal() {
                     if (this.currentUser.role === 'read') return;
-                    this.vlanForm = { id: '', name: '', subnet: '', gateway: '', totalIps: 254 };
+                    this.vlanForm = { id: '', name: '', subnet: '', gateway: '' };
                     this.vlanModalOpen = true;
                 },
 
@@ -2195,7 +2260,6 @@
                     this.userModalOpen = true;
                 },
 
-                // Submissão de Formulários
                 submitVlanForm() {
                     if (this.currentUser.role === 'read') return;
                     const idInt = parseInt(this.vlanForm.id);
@@ -2207,8 +2271,7 @@
                         id: idInt,
                         name: this.vlanForm.name.trim(),
                         subnet: this.vlanForm.subnet.trim(),
-                        gateway: this.vlanForm.gateway.trim(),
-                        totalIps: 254
+                        gateway: this.vlanForm.gateway.trim()
                     };
                     this.vlans.push(newVlan);
                     this.vlans = [...this.vlans]; // Garantia de Reatividade
@@ -2309,12 +2372,12 @@
                     this.addToast('Porta desvinculada no formulário.', 'warning');
                 },
 
-                // Confirmações de Exclusões
                 async confirmDeleteDevice(dev) {
                     if (this.currentUser.role === 'read') return;
                     const res = await this.openConfirm('Excluir Ativo', `Deseja realmente excluir o computador ${dev.name}?`);
                     if (res) {
                         this.devices = this.devices.filter(d => d.id !== dev.id);
+                        this.devices = [...this.devices]; // Força reatividade
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu o computador: ${dev.name}`);
                         this.addToast('Dispositivo removido.', 'success');
@@ -2389,7 +2452,6 @@
                     }
                 },
 
-                // Gerenciamento e Parse de Arquivos CSV
                 toggleLocalImport(tabName) {
                     this.localImportPanel = this.localImportPanel === tabName ? null : tabName;
                     this.resetCsvImportState();
@@ -2417,9 +2479,9 @@
 
                 loadSampleCsv(type) {
                     if (type === 'devices') {
-                        this.csvText = "Nome_Computador,IP,VLAN,Switch,Porta,Ponto\nPC-TESTE-01,192.168.10.99,10,SW-01,15,T-101\nPC-TESTE-02,192.168.20.99,20,SW-02,18,T-201";
+                        this.csvText = "Nome_Computador,IP,VLAN,Switch,Porta,Ponto\nPC-TESTE-01,192.168.10.9,10,SW-01,15,T-101\nPC-TESTE-02,192.168.20.5,20,SW-02,18,T-201";
                     } else if (type === 'vlans') {
-                        this.csvText = "ID_Vlan,Nome_Vlan,Subrede,Gateway\n40,CFTV Interno,192.168.40.0/24,192.168.40.1\n50,Rede Convidados,192.168.50.0/24,192.168.50.1";
+                        this.csvText = "ID_Vlan,Nome_Vlan,Subrede,Gateway\n40,CFTV Interno,192.168.40.0/24,192.168.40.1\n50,Rede Convidados,192.168.50.0/28,192.168.50.1";
                     } else if (type === 'switches') {
                         this.csvText = "Nome_Switch,Modelo,TotalPortas,RackLocal\nSW-03,Dell Networking,24,Rack Sala Diretoria\nSW-04,Cisco SG350,48,Rack TI";
                     } else if (type === 'outlets') {
@@ -2509,7 +2571,7 @@
                         this.devices = [...this.devices]; // Força reatividade no IPAM
                         this.saveDevices();
                     } else if (type === 'vlans') {
-                        const newVlan = { id: item.data.id, name: item.data.name, subnet: item.data.subnet, gateway: item.data.gateway, totalIps: 254 };
+                        const newVlan = { id: item.data.id, name: item.data.name, subnet: item.data.subnet, gateway: item.data.gateway };
                         this.vlans.push(newVlan);
                         this.vlans = [...this.vlans];
                         this.saveVlans();
@@ -2537,7 +2599,7 @@
                     }
                     targets.forEach(item => {
                         if (type === 'devices') this.devices.push({ id: Date.now() + Math.random(), ...item.data });
-                        else if (type === 'vlans') this.vlans.push({ id: item.data.id, name: item.data.name, subnet: item.data.subnet, gateway: item.data.gateway, totalIps: 254 });
+                        else if (type === 'vlans') this.vlans.push({ id: item.data.id, name: item.data.name, subnet: item.data.subnet, gateway: item.data.gateway });
                         else if (type === 'switches') this.switches.push({ id: Date.now() + Math.random(), ...item.data });
                         else if (type === 'outlets') this.outlets.push({ id: Date.now() + Math.random(), ...item.data });
                     });
@@ -2563,7 +2625,6 @@
                     this.addToast('Todos os registros válidos foram importados!', 'success');
                 },
 
-                // Lógica de Sincronização e Conexão de Nuvem (Supabase)
                 restoreSupabaseConfig() {
                     const savedConfig = localStorage.getItem('netmap_supabase_config');
                     if (savedConfig) {
