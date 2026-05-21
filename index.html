@@ -88,17 +88,7 @@
                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
                     Entrar no Sistema
                 </button>
-
-                <div class="text-center pt-2 border-t border-slate-800/60 mt-4">
-                    <button type="button" @click="forceResetUsers()" class="text-[11px] text-slate-500 hover:text-blue-400 transition underline font-mono tracking-wide">
-                        Restaurar Usuários Padrão (Solucionar Bloqueio)
-                    </button>
-                </div>
             </form>
-            <div class="bg-slate-950/60 p-3 rounded-lg border border-slate-800/80 text-center text-[11px] text-slate-400">
-                <span class="block"><strong>Acesso Rápido Admin:</strong> admin / admin</span>
-                <span class="block mt-1"><strong>Acesso Leitura:</strong> leitor / leitor</span>
-            </div>
         </div>
     </div>
 
@@ -1705,13 +1695,13 @@
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala</label>
-                    <input type="text" x-model="outletForm.location" required placeholder="Ex: Sala Financeiro - Mesa 2" 
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
+                    <input type="text" x-model="outletForm.location" placeholder="Ex: Sala Financeiro - Mesa 2" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Switch</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Switch (Opcional)</label>
                         <select x-model="outletForm.switchName" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                             <option value="">Nenhum</option>
                             <template x-for="sw in switches" :key="sw.id">
@@ -1720,7 +1710,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Porta do Switch</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Porta do Switch (Opcional)</label>
                         <input type="number" x-model="outletForm.port" placeholder="Ex: 5" 
                                class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                     </div>
@@ -1751,13 +1741,13 @@
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala</label>
-                    <input type="text" x-model="editOutletForm.location" required placeholder="Ex: Sala Financeiro - Mesa 2" 
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
+                    <input type="text" x-model="editOutletForm.location" placeholder="Ex: Sala Financeiro - Mesa 2" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Switch</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Switch (Opcional)</label>
                         <select x-model="editOutletForm.switchName" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                             <option value="">Nenhum</option>
                             <template x-for="sw in switches" :key="sw.id">
@@ -1766,7 +1756,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Porta do Switch</label>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Porta do Switch (Opcional)</label>
                         <input type="number" x-model="editOutletForm.port" placeholder="Ex: 5" 
                                class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                     </div>
@@ -2063,9 +2053,24 @@
 
                 // Lógica IPAM (Gerenciamento de IPs)
                 isIpUsed(vlanId, suffix) {
-                    const prefix = this.getVlanSubnet(vlanId).split('.').slice(0, 3).join('.');
+                    if (!vlanId) return false;
+                    const subnet = this.getVlanSubnet(vlanId);
+                    if (!subnet || subnet === 'N/A') return false;
+                    const prefix = subnet.split('.').slice(0, 3).join('.');
                     const fullIp = `${prefix}.${suffix}`;
-                    return this.devices.some(d => d.ip === fullIp);
+                    return this.devices.some(d => d.ip && d.ip.trim() === fullIp.trim());
+                },
+
+                checkIpAssignment(vlanId, suffix) {
+                    if (!vlanId) return;
+                    const subnet = this.getVlanSubnet(vlanId);
+                    if (!subnet || subnet === 'N/A') return;
+                    const prefix = subnet.split('.').slice(0, 3).join('.');
+                    this.selectedIpBlock = `${prefix}.${suffix}`;
+                },
+
+                getDeviceByIp(ip) {
+                    return this.devices.find(d => d.ip && d.ip.trim() === ip.trim());
                 },
 
                 checkIpAssignment(vlanId, suffix) {
@@ -2125,6 +2130,7 @@
                         const prevPort = dev.port;
                         dev.switchName = '';
                         dev.port = null;
+                        this.devices = [...this.devices]; // Força atualização reativa
                         this.saveDevices();
                         this.addLog('UPDATE', `Desconectou ${dev.name} da porta ${prevPort} do switch ${swName}.`);
                         this.addToast('Dispositivo desconectado com sucesso!', 'success');
@@ -2205,8 +2211,8 @@
                     const newOutlet = {
                         id: Date.now(),
                         name: this.outletForm.name.toUpperCase().trim(),
-                        location: this.outletForm.location.trim(),
-                        switchName: this.outletForm.switchName,
+                        location: this.outletForm.location ? this.outletForm.location.trim() : '',
+                        switchName: this.outletForm.switchName || '',
                         port: this.outletForm.port ? parseInt(this.outletForm.port) : null,
                         status: this.outletForm.status
                     };
@@ -2222,8 +2228,8 @@
                     const o = this.outlets.find(out => out.id === this.editOutletForm.id);
                     if (o) {
                         o.name = this.editOutletForm.name.toUpperCase().trim();
-                        o.location = this.editOutletForm.location.trim();
-                        o.switchName = this.editOutletForm.switchName;
+                        o.location = this.editOutletForm.location ? this.editOutletForm.location.trim() : '';
+                        o.switchName = this.editOutletForm.switchName || '';
                         o.port = this.editOutletForm.port ? parseInt(this.editOutletForm.port) : null;
                         o.status = this.editOutletForm.status;
                         this.saveOutlets();
@@ -2683,6 +2689,7 @@
                     };
 
                     this.devices.push(newDevice);
+                    this.devices = [...this.devices]; // Força atualização reativa
                     this.saveDevices();
                     this.addLog('CREATE', `Cadastrou o computador: ${newDevice.name}`);
                     this.addToast('Dispositivo cadastrado com sucesso!', 'success');
@@ -2728,6 +2735,7 @@
                         device.port = this.editDeviceForm.port ? parseInt(this.editDeviceForm.port) : null;
                         device.outlet = this.editDeviceForm.outlet.trim() || '';
 
+                        this.devices = [...this.devices]; // Força atualização reativa
                         this.saveDevices();
                         this.addLog('UPDATE', `Editou o computador: ${device.name}`);
                         this.addToast('Dispositivo atualizado com sucesso!', 'success');
