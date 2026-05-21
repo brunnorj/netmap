@@ -761,7 +761,11 @@
                             <div class="grid gap-1.5 bg-slate-900 p-4 rounded-lg border border-slate-800 max-h-[400px] overflow-y-auto" style="grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));">
                                 <template x-for="ipObj in getVlanIps(selectedVlanId)" :key="ipObj.fullIp">
                                     <div @click="checkIpAssignment(selectedVlanId, ipObj.fullIp)"
-                                         :class="isIpUsed(selectedVlanId, ipObj.fullIp) ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer font-bold' : 'bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 cursor-pointer'"
+                                         :class="ipObj.isGateway 
+                                            ? 'bg-amber-950/40 border border-amber-800 text-amber-400 font-bold cursor-pointer' 
+                                            : (isIpUsed(selectedVlanId, ipObj.fullIp) 
+                                                ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer font-bold animate-fade-in' 
+                                                : 'bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 cursor-pointer')"
                                          class="h-10 rounded text-xs flex flex-col items-center justify-center transition p-1">
                                         <span x-text="ipObj.label" class="font-mono text-[10px]"></span>
                                     </div>
@@ -783,7 +787,13 @@
                                         <div class="text-xs text-slate-400">IP Selecionado</div>
                                         <div class="text-sm font-bold text-cyan-400 font-mono mt-0.5" x-text="selectedIpBlock"></div>
                                         
-                                        <template x-if="getDeviceByIp(selectedIpBlock)">
+                                        <template x-if="selectedIpBlock === getVlanGateway(selectedVlanId)">
+                                            <div class="mt-3 text-xs text-amber-400 font-medium flex items-center gap-1.5">
+                                                <span>⚠️</span> Este é o endereço de Gateway reservado para esta VLAN.
+                                            </div>
+                                        </template>
+                                        
+                                        <template x-if="selectedIpBlock !== getVlanGateway(selectedVlanId) && getDeviceByIp(selectedIpBlock)">
                                             <div class="mt-3 pt-3 border-t border-slate-800/80 space-y-2 text-xs">
                                                 <div class="flex justify-between">
                                                     <span class="text-slate-400">Ativo/Host:</span>
@@ -800,7 +810,7 @@
                                             </div>
                                         </template>
 
-                                        <template x-if="!getDeviceByIp(selectedIpBlock)">
+                                        <template x-if="selectedIpBlock !== getVlanGateway(selectedVlanId) && !getDeviceByIp(selectedIpBlock)">
                                             <div class="mt-3 text-xs text-emerald-400 font-medium flex items-center gap-1.5">
                                                 <span>✓</span> Endereço IP disponível e livre para alocação.
                                             </div>
@@ -2062,52 +2072,52 @@
 
                 getVlanIps(vlanId) {
                     const vlan = this.vlans.find(v => v.id === parseInt(vlanId));
-                    if (!vlan || !vlan.subnet) return [];
+                    if (!vlan || !vlan.gateway) return [];
 
+                    // Converte Gateway para bytes de IP
+                    const gwBytes = vlan.gateway.split('.').map(Number);
+                    if (gwBytes.length !== 4 || gwBytes.some(isNaN)) return [];
+
+                    // Converte CIDR
                     const parts = vlan.subnet.split('/');
-                    const baseIp = parts[0].trim();
                     const cidr = parts[1] ? parseInt(parts[1].trim(), 10) : 24;
 
-                    const ipBytes = baseIp.split('.').map(Number);
-                    if (ipBytes.length !== 4 || ipBytes.some(isNaN)) return [];
-
-                    // Conversão limpa de inteiros sem usar operadores binários com sinal do JS (Evita erros em IPs > 128.x.x.x)
-                    const ipNum = (ipBytes[0] * 16777216) + (ipBytes[1] * 65536) + (ipBytes[2] * 256) + ipBytes[3];
-
-                    // Capacidade de hosts dessa subrede (/26 = 64, /27 = 32, /28 = 16)
-                    const numHosts = Math.pow(2, 32 - cidr);
-                    
-                    // Alinha na fronteira correta de rede de acordo com a máscara
-                    const networkNum = Math.floor(ipNum / numHosts) * numHosts;
-                    const broadcastNum = networkNum + numHosts - 1;
-
-                    // Ignorar os IPs reservados de rede e broadcast se a rede for maior do que /31
-                    let start = networkNum + 1;
-                    let end = broadcastNum - 1;
-
-                    if (cidr >= 31) {
-                        start = networkNum;
-                        end = broadcastNum;
-                    }
+                    // Usabilidade real da rede (Ex: /26 possui 62 IPs de host utilizáveis)
+                    const capacity = Math.pow(2, 32 - cidr) - 2;
 
                     const ipList = [];
-                    const maxIps = 1024; // Prevenção de loop em redes grandes (/16)
-                    const totalToGenerate = Math.min(end - start + 1, maxIps);
 
-                    for (let i = 0; i < totalToGenerate; i++) {
-                        const currentIpNum = start + i;
+                    // Endereço de Gateway como o primeiro elemento da grade
+                    ipList.push({
+                        fullIp: vlan.gateway,
+                        label: 'GW',
+                        isGateway: true
+                    });
+
+                    // Valor base inteiro do Gateway
+                    const gwNum = (gwBytes[0] * 16777216) + (gwBytes[1] * 65536) + (gwBytes[2] * 256) + gwBytes[3];
+
+                    // Gera os IPs sequenciais após o Gateway
+                    for (let i = 1; i <= capacity; i++) {
+                        const currentIpNum = gwNum + i;
+
                         const octet1 = Math.floor(currentIpNum / 16777216) % 256;
                         const octet2 = Math.floor(currentIpNum / 65536) % 256;
                         const octet3 = Math.floor(currentIpNum / 256) % 256;
                         const octet4 = currentIpNum % 256;
-                        const fullIp = `${octet1}.${octet2}.${octet3}.${octet4}`;
 
-                        // Se a subrede for /24 ou menor, exibe sufixo (.X). Se for maior (/23 ou menor), exibe .X.Y
-                        const label = cidr >= 24 ? `.${octet4}` : `${octet3}.${octet4}`;
+                        // Evitar endereços de broadcast .255 lógicos em redes comuns
+                        if (cidr <= 24 && octet4 === 255) {
+                            continue;
+                        }
+
+                        const fullIp = `${octet1}.${octet2}.${octet3}.${octet4}`;
+                        const label = `.${octet4}`;
 
                         ipList.push({
                             fullIp: fullIp,
-                            label: label
+                            label: label,
+                            isGateway: false
                         });
                     }
                     return ipList;
