@@ -320,26 +320,35 @@
                     <div x-show="localImportPanel === 'devices'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de Computadores (CSV)
+                                <span>📥</span> Importador de Computadores (Upload de Arquivo CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
                         
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="lg:col-span-2 space-y-3">
-                                <textarea x-model="csvText" rows="5" @input="resetCsvImportState()"
-                                          placeholder="Cole aqui as linhas do seu CSV (ex: Nome_Computador, IP, VLAN, Switch, Porta, Ponto)..."
-                                          class="w-full bg-slate-900 text-slate-300 font-mono p-4 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 text-xs"></textarea>
+                            <div class="lg:col-span-2 space-y-4">
+                                <!-- Seletor de Arquivos Drag-and-Drop Local -->
+                                <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
+                                    <input type="file" accept=".csv" @change="handleCsvUpload($event, 'devices')" class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <span class="text-3xl mb-2">📥</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
+                                </div>
+                                
+                                <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
+                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                </div>
+
                                 <div class="flex justify-between items-center text-xs">
-                                    <button @click="loadSampleCsv('devices'); readCsvColumns('devices');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo</button>
-                                    <button @click="readCsvColumns('devices')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
+                                    <button @click="loadSampleCsv('devices');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo (Simulação)</button>
+                                    <button x-show="csvText" @click="readCsvColumns('devices')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
                                 </div>
                             </div>
                             <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
                                 <p class="font-bold text-white">Instruções:</p>
-                                <p>1. Cole seus dados em formato CSV delimitado por vírgula ou ponto-e-vírgula.</p>
-                                <p>2. Clique em "Analisar Colunas" e faça o mapeamento correspondente.</p>
-                                <p>3. Clique em "Processar" para validar individualmente ou importar em massa.</p>
+                                <p>1. Selecione seu arquivo CSV clicando no painel pontilhado.</p>
+                                <p>2. O sistema detectará automaticamente as colunas disponíveis.</p>
+                                <p>3. Faça o mapeamento das colunas correspondentes e valide os registros abaixo.</p>
                             </div>
                         </div>
 
@@ -567,18 +576,26 @@
                     <div x-show="localImportPanel === 'vlans'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de VLANs (CSV)
+                                <span>📥</span> Importador de VLANs (Upload de Arquivo CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Panel ✖</button>
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="lg:col-span-2 space-y-3">
-                                <textarea x-model="csvText" rows="5" @input="resetCsvImportState()"
-                                          placeholder="Cole aqui as linhas de VLANs (ex: ID_Vlan, Nome_Vlan, Subrede, Gateway)..."
-                                          class="w-full bg-slate-900 text-slate-300 font-mono p-4 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 text-xs"></textarea>
+                            <div class="lg:col-span-2 space-y-4">
+                                <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
+                                    <input type="file" accept=".csv" @change="handleCsvUpload($event, 'vlans')" class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <span class="text-3xl mb-2">📥</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
+                                </div>
+
+                                <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
+                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                </div>
+
                                 <div class="flex justify-between items-center text-xs">
-                                    <button @click="loadSampleCsv('vlans'); readCsvColumns('vlans');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo</button>
-                                    <button @click="readCsvColumns('vlans')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
+                                    <button @click="loadSampleCsv('vlans');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo (Simulação)</button>
+                                    <button x-show="csvText" @click="readCsvColumns('vlans')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
                                 </div>
                             </div>
                             <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
@@ -818,7 +835,7 @@
                                     </div>
 
                                     <div class="bg-slate-900/50 p-4 text-xs text-slate-500 rounded-lg text-center" x-show="!selectedIpBlock">
-                                        Clique em um dos blocos de IP ao lado no mapa para analisar seus detalhes e vinculação física.
+                                        Clique em um dos blocos de IP ao lado no mapa para analisar seus detalhes and vinculação física.
                                     </div>
                                 </div>
                             </div>
@@ -851,18 +868,26 @@
                     <div x-show="localImportPanel === 'switches'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de Switches de Rede (CSV)
+                                <span>📥</span> Importador de Switches de Rede (Upload de Arquivo CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="lg:col-span-2 space-y-3">
-                                <textarea x-model="csvText" rows="5" @input="resetCsvImportState()"
-                                          placeholder="Cole aqui as linhas de Switches (ex: Nome_Switch, Modelo, TotalPortas, RackLocal)..."
-                                          class="w-full bg-slate-900 text-slate-300 font-mono p-4 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 text-xs"></textarea>
+                            <div class="lg:col-span-2 space-y-4">
+                                <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
+                                    <input type="file" accept=".csv" @change="handleCsvUpload($event, 'switches')" class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <span class="text-3xl mb-2">📥</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
+                                </div>
+
+                                <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
+                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                </div>
+
                                 <div class="flex justify-between items-center text-xs">
-                                    <button @click="loadSampleCsv('switches'); readCsvColumns('switches');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo</button>
-                                    <button @click="readCsvColumns('switches')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
+                                    <button @click="loadSampleCsv('switches');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo (Simulação)</button>
+                                    <button x-show="csvText" @click="readCsvColumns('switches')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
                                 </div>
                             </div>
                             <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
@@ -1098,20 +1123,35 @@
                     <div x-show="localImportPanel === 'outlets'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de Pontos de Rede (CSV)
+                                <span>📥</span> Importador de Pontos de Rede (Upload de Arquivo CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
                         
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div class="lg:col-span-2 space-y-3">
-                                <textarea x-model="csvText" rows="5" @input="resetCsvImportState()"
-                                          placeholder="Cole aqui as linhas do seu CSV (ex: Identificacao, Sala, Switch, Porta, Status)..."
-                                          class="w-full bg-slate-900 text-slate-300 font-mono p-4 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 text-xs"></textarea>
-                                <div class="flex justify-between items-center text-xs">
-                                    <button @click="loadSampleCsv('outlets'); readCsvColumns('outlets');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo</button>
-                                    <button @click="readCsvColumns('outlets')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
+                            <div class="lg:col-span-2 space-y-4">
+                                <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
+                                    <input type="file" accept=".csv" @change="handleCsvUpload($event, 'outlets')" class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <span class="text-3xl mb-2">📥</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
                                 </div>
+
+                                <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
+                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                </div>
+
+                                <div class="flex justify-between items-center text-xs">
+                                    <button @click="loadSampleCsv('outlets');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo (Simulação)</button>
+                                    <button x-show="csvText" @click="readCsvColumns('outlets')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition">Analisar Colunas</button>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
+                                <p class="font-bold text-white">Campos para Pontos de Rede:</p>
+                                <p>• Identificação (ID Tomada)</p>
+                                <p>• Localização / Sala (Físico)</p>
+                                <p>• Switch e Porta associados</p>
+                                <p>• Status do Ponto</p>
                             </div>
                         </div>
 
@@ -1845,11 +1885,7 @@
                 csvHeaders: [],
                 csvMappings: {},
                 parsedImportItems: [],
-
-                // Configurações Nuvem (Supabase)
-                supabaseConfig: { url: '', key: '' },
-                isCloudSyncActive: false,
-                supabaseClient: null,
+                uploadedFileName: '',
 
                 initSystem() {
                     this.restoreLocalDatabase();
@@ -2449,31 +2485,50 @@
                     this.csvHeaders = [];
                     this.csvMappings = {};
                     this.parsedImportItems = [];
+                    this.uploadedFileName = '';
                 },
 
-                readCsvColumns() {
+                handleCsvUpload(event, type) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    this.uploadedFileName = file.name;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        this.csvText = e.target.result;
+                        this.readCsvColumns(type);
+                    };
+                    reader.readAsText(file);
+                },
+
+                readCsvColumns(type) {
                     if (!this.csvText.trim()) {
-                        this.addToast('Cole o conteúdo CSV para analisar!', 'error');
+                        this.addToast('Nenhum conteúdo carregado para analisar!', 'error');
                         return;
                     }
                     const lines = this.csvText.split('\n').filter(l => l.trim() !== '');
                     if (lines.length > 0) {
                         const separator = lines[0].includes(';') ? ';' : ',';
                         this.csvHeaders = lines[0].split(separator).map(h => h.replace(/"/g, '').trim());
-                        this.addToast('Colunas analisadas com sucesso. Realize o mapeamento abaixo.', 'success');
+                        this.addToast('Arquivo carregado e colunas analisadas com sucesso. Realize o mapeamento abaixo.', 'success');
                     }
                 },
 
                 loadSampleCsv(type) {
                     if (type === 'devices') {
                         this.csvText = "Nome_Computador,IP,VLAN,Switch,Porta,Ponto\nPC-TESTE-01,192.168.10.9,10,SW-01,15,T-101\nPC-TESTE-02,192.168.20.5,20,SW-02,18,T-201";
+                        this.uploadedFileName = "exemplo_computadores.csv";
                     } else if (type === 'vlans') {
                         this.csvText = "ID_Vlan,Nome_Vlan,Subrede,Gateway\n40,CFTV Interno,192.168.40.0/24,192.168.40.1\n50,Rede Convidados,192.168.50.0/28,192.168.50.1";
+                        this.uploadedFileName = "exemplo_vlans.csv";
                     } else if (type === 'switches') {
                         this.csvText = "Nome_Switch,Modelo,TotalPortas,RackLocal\nSW-03,Dell Networking,24,Rack Sala Diretoria\nSW-04,Cisco SG350,48,Rack TI";
+                        this.uploadedFileName = "exemplo_switches.csv";
                     } else if (type === 'outlets') {
                         this.csvText = "Identificacao,Sala,Switch,Porta,Status\nT-105,Sala CPD Desk,SW-01,20,Ativo\nT-205,Recepção,SW-02,22,Ativo";
+                        this.uploadedFileName = "exemplo_pontos.csv";
                     }
+                    this.readCsvColumns(type);
                 },
 
                 processCsvWithMappings(type) {
