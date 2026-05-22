@@ -1532,18 +1532,29 @@
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
-                    <input type="text" x-model="deviceForm.ip" placeholder="Ex: 192.168.10.22" 
-                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">VLAN (Opcional)</label>
-                    <select x-model="deviceForm.vlanId" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                    <select x-model="deviceForm.vlanId" @change="deviceForm.ip = ''" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                         <option value="">Selecione a VLAN</option>
                         <template x-for="vlan in vlans" :key="vlan.id">
                             <option :value="vlan.id" x-text="'VLAN ' + vlan.id + ' - ' + vlan.name"></option>
                         </template>
                     </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
+                    <!-- Exibição Condicional de IP: Seletor Inteligente se houver VLAN, ou digitação manual se não houver -->
+                    <template x-if="deviceForm.vlanId">
+                        <select x-model="deviceForm.ip" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                            <option value="">-- Escolha um IP Disponível na VLAN --</option>
+                            <template x-for="ipObj in getAvailableVlanIps(deviceForm.vlanId)" :key="ipObj.fullIp">
+                                <option :value="ipObj.fullIp" x-text="ipObj.fullIp"></option>
+                            </template>
+                        </select>
+                    </template>
+                    <template x-if="!deviceForm.vlanId">
+                        <input type="text" x-model="deviceForm.ip" placeholder="Escolha uma VLAN acima para ver a lista de IPs livres..." 
+                               class="w-full bg-slate-950 text-slate-400 rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                    </template>
                 </div>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
@@ -1588,18 +1599,29 @@
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
-                    <input type="text" x-model="editDeviceForm.ip" placeholder="Ex: 192.168.10.22" 
-                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
-                </div>
-                <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">VLAN (Opcional)</label>
-                    <select x-model="editDeviceForm.vlanId" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                    <select x-model="editDeviceForm.vlanId" @change="editDeviceForm.ip = ''" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                         <option value="">Selecione a VLAN</option>
                         <template x-for="vlan in vlans" :key="vlan.id">
                             <option :value="vlan.id" x-text="'VLAN ' + vlan.id + ' - ' + vlan.name"></option>
                         </template>
                     </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
+                    <!-- Exibição Condicional de IP na Edição: Seletor Inteligente com resgate de IP da própria máquina -->
+                    <template x-if="editDeviceForm.vlanId">
+                        <select x-model="editDeviceForm.ip" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                            <option value="">-- Escolha um IP Disponível na VLAN --</option>
+                            <template x-for="ipObj in getAvailableVlanIps(editDeviceForm.vlanId, editDeviceForm.id)" :key="ipObj.fullIp">
+                                <option :value="ipObj.fullIp" x-text="ipObj.fullIp" :selected="editDeviceForm.ip === ipObj.fullIp"></option>
+                            </template>
+                        </select>
+                    </template>
+                    <template x-if="!editDeviceForm.vlanId">
+                        <input type="text" x-model="editDeviceForm.ip" placeholder="Escolha uma VLAN acima para ver a lista de IPs livres..." 
+                               class="w-full bg-slate-950 text-slate-400 rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                    </template>
                 </div>
                 <div class="grid grid-cols-3 gap-4">
                     <div>
@@ -1879,6 +1901,11 @@
                 selectedSwitchId: null,
                 selectedPortNum: null,
 
+                // Módulos de Sincronização e Chaves Supabase (Salvas localmente no navegador)
+                supabaseConfig: { url: '', key: '' },
+                supabaseClient: null,
+                isCloudSyncActive: false,
+
                 // Módulos de Importação CSV
                 localImportPanel: null,
                 csvText: '',
@@ -2157,6 +2184,28 @@
                         });
                     }
                     return ipList;
+                },
+
+                // Retorna apenas os IPs que estão de fato livres naquela VLAN para preencher a caixa seletiva
+                getAvailableVlanIps(vlanId, currentDeviceId = null) {
+                    if (!vlanId) return [];
+                    const allIps = this.getVlanIps(vlanId);
+                    
+                    return allIps.filter(ipObj => {
+                        // Impedir Gateway
+                        if (ipObj.isGateway) return false;
+
+                        // Descobrir se o IP já está alocado para algum outro computador
+                        const usedDevice = this.getDeviceByIp(ipObj.fullIp);
+                        if (usedDevice) {
+                            // Se for o computador atual que estamos editando, deve continuar visível
+                            if (currentDeviceId && usedDevice.id === currentDeviceId) {
+                                return true;
+                            }
+                            return false; // Ocupado
+                        }
+                        return true; // Livre
+                    });
                 },
 
                 vlanIpsUsedCount(vlanId) {
