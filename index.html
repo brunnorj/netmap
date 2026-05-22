@@ -1,14 +1,14 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NetMap Manager - Controle de Infraestrutura, IPAM e Switches</title>
+    <title>NetMap Manager - Controlo de Infraestrutura, IPAM e Switches</title>
     <!-- Tailwind CSS para estilização moderna e design limpo -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Alpine.js para reatividade e estado da aplicação -->
     <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-    <!-- Supabase Client JS para integração opcional com o banco de dados -->
+    <!-- Supabase Client JS para integração opcional com a base de dados -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <style>
         [x-cloak] { display: none !important; }
@@ -56,14 +56,80 @@
         </div>
     </div>
 
-    <!-- Tela de Autenticação -->
+    <!-- Modal de Script SQL do Supabase -->
+    <div x-show="sqlModalOpen" class="fixed inset-0 z-[120] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-2xl w-full p-6 shadow-2xl flex flex-col max-h-[90vh]">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-2 text-emerald-400">
+                    <span class="text-xl">⚡</span>
+                    <h3 class="text-lg font-bold text-white">Script SQL de Inicialização do Supabase</h3>
+                </div>
+                <button @click="sqlModalOpen = false" class="text-slate-400 hover:text-white transition text-lg">✖</button>
+            </div>
+            
+            <p class="text-xs text-slate-400 my-3">
+                Copie o script abaixo e execute-o no **SQL Editor** do seu painel do Supabase. Ele criará as tabelas necessárias, desativará as restrições de segurança (RLS) para testes rápidos e inserirá as credenciais iniciais.
+            </p>
+
+            <div class="flex-1 overflow-y-auto bg-slate-950 p-4 rounded-lg font-mono text-xs text-slate-300 border border-slate-800 select-all whitespace-pre-wrap" x-text="getSqlScript()"></div>
+
+            <div class="flex justify-between items-center pt-4 mt-3 border-t border-slate-800 shrink-0">
+                <span class="text-[10px] text-amber-400">⚠️ Execute todo o bloco acima para evitar erros de autenticação!</span>
+                <div class="flex gap-2">
+                    <button @click="copySqlScript()" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded text-xs font-bold transition flex items-center gap-1.5">
+                        <span>📋</span> Copiar Código SQL
+                    </button>
+                    <button @click="sqlModalOpen = false" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded text-xs transition">
+                        Fechar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Relatório de Diagnóstico de Tabelas -->
+    <div x-show="diagnosticModalOpen" class="fixed inset-0 z-[130] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="flex justify-between items-center pb-4 border-b border-slate-800">
+                <div class="flex items-center gap-2 text-cyan-400">
+                    <span class="text-xl">🩺</span>
+                    <h3 class="text-lg font-bold text-white">Relatório de Diagnóstico de Ligação</h3>
+                </div>
+                <button @click="diagnosticModalOpen = false" class="text-slate-400 hover:text-white transition text-lg">✖</button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto my-4 space-y-3 pr-2 text-xs">
+                <p class="text-slate-300">O sistema inspecionou individualmente a acessibilidade de cada tabela no Supabase para diagnosticar bloqueios de RLS ou tabelas inexistentes:</p>
+                
+                <div class="space-y-2 bg-slate-950 p-4 rounded-lg font-mono text-slate-300 border border-slate-800 overflow-y-auto max-h-[45vh]">
+                    <template x-for="item in diagnosticReport" :key="item.table">
+                        <div class="border-b border-slate-900 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
+                            <div class="flex items-center justify-between">
+                                <span class="font-bold text-slate-200" x-text="item.table"></span>
+                                <span :class="item.status === 'OK' ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'" x-text="item.status"></span>
+                            </div>
+                            <p class="text-[11px] text-slate-400 mt-1" x-text="item.details"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-4 border-t border-slate-800">
+                <button @click="diagnosticModalOpen = false" class="bg-blue-600 hover:bg-blue-500 text-white px-5 py-2 rounded text-xs font-bold transition">
+                    Fechar Diagnóstico
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela de Autenticação / Início de Sessão -->
     <div x-show="!isLoggedIn" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950 p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-5">
             <div class="text-center">
                 <h1 class="text-2xl font-extrabold tracking-wider bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center justify-center gap-2">
                     <span>🔌</span> NETMAP PRO
                 </h1>
-                <p class="text-xs text-slate-400 mt-2">Controle de Infraestrutura, IPAM e Switches</p>
+                <p class="text-xs text-slate-400 mt-2">Controlo de Infraestrutura, IPAM e Switches</p>
             </div>
 
             <!-- Painel de Sincronização / Diagnóstico Pré-Login -->
@@ -75,25 +141,54 @@
                 </div>
                 
                 <!-- Detalhes do carregamento do Supabase -->
-                <template x-if="isCloudSyncActive">
-                    <div class="space-y-2 pt-1 border-t border-slate-900">
-                        <div class="flex justify-between items-center">
-                            <span class="text-[11px] text-slate-400" 
-                                  x-text="isConnectingCloud ? '🔄 A sincronizar...' : (cloudUserCount > 0 ? '✓ ' + cloudUserCount + ' contas carregadas da nuvem' : 'Contas pendentes de carga')"></span>
-                            <button type="button" @click="pullUsersOnLoad()" :disabled="isConnectingCloud" 
-                                    class="text-blue-400 hover:text-blue-300 font-bold hover:underline transition">
+                <div class="space-y-2 pt-1 border-t border-slate-900">
+                    <div class="flex justify-between items-center">
+                        <span class="text-[11px] text-slate-400" 
+                              x-text="isConnectingCloud ? '🔄 A sincronizar...' : (isCloudSyncActive ? '✓ ' + cloudUserCount + ' utilizadores na nuvem' : 'Utilizando Base de Dados Local')"></span>
+                        
+                        <div class="flex gap-2">
+                            <button type="button" @click="runDiagnostics()" :disabled="!isCloudSyncActive"
+                                    :class="!isCloudSyncActive ? 'opacity-40 cursor-not-allowed' : 'text-cyan-400 hover:text-cyan-300'"
+                                    class="font-bold hover:underline transition flex items-center gap-0.5">
+                                🩺 Diagnosticar
+                            </button>
+                            <button type="button" @click="openSqlModal()" 
+                                    class="text-emerald-400 hover:text-emerald-300 font-bold hover:underline transition">
+                                📜 Ver SQL
+                            </button>
+                            <button type="button" @click="pullUsersOnLoad()" :disabled="isConnectingCloud || !isCloudSyncActive" 
+                                    :class="!isCloudSyncActive ? 'opacity-50 cursor-not-allowed text-slate-600' : 'text-blue-400 hover:text-blue-300 hover:underline'"
+                                    class="font-bold transition">
                                 Sincronizar
                             </button>
                         </div>
-                        <!-- Mensagem de Erro do Supabase, se houver -->
-                        <div x-show="supabaseLoadError" class="text-red-400 text-[10px] bg-red-950/30 border border-red-900/40 p-2 rounded break-all" x-text="supabaseLoadError"></div>
                     </div>
-                </template>
+
+                    <!-- Mensagem de Erro do Supabase, se houver -->
+                    <div x-show="supabaseLoadError" class="space-y-2" x-cloak>
+                        <div class="text-red-400 text-xs bg-red-950/40 border border-red-900/50 p-3 rounded-lg break-all flex flex-col gap-2">
+                            <div class="flex items-start gap-1.5">
+                                <span class="text-sm">⚠️</span>
+                                <span class="font-semibold text-[11px]" x-text="supabaseLoadError"></span>
+                            </div>
+                            <div class="flex gap-2">
+                                <button type="button" @click="disconnectSupabase()" 
+                                        class="bg-red-600 hover:bg-red-500 text-white font-bold py-1 px-2.5 rounded text-[10px] transition shadow-md">
+                                    🔌 Desconectar Nuvem (Usar Modo Local)
+                                </button>
+                                <button type="button" @click="forceLocalBypass()" 
+                                        class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-1 px-2.5 rounded text-[10px] transition border border-slate-700">
+                                    Aceder Localmente (admin/admin)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Configuração manual diretamente da tela de login -->
                 <div class="text-center pt-2">
                     <button type="button" @click="loginConfigOpen = !loginConfigOpen" class="text-[11px] text-slate-500 hover:text-slate-300 flex items-center justify-center gap-1 w-full font-medium transition">
-                        <span x-text="loginConfigOpen ? '🙈 Ocultar Configurações Manuais' : '⚙️ Configurar Conexão Manualmente'"></span>
+                        <span x-text="loginConfigOpen ? '🙈 Ocultar Configurações Manuais' : '⚙️ Configurar Conexão Manualmente / Modo Local'"></span>
                     </button>
                 </div>
 
@@ -109,36 +204,47 @@
                         <input type="password" x-model="supabaseConfig.key" placeholder="Chave pública Anon" 
                                class="w-full bg-slate-900 text-slate-200 p-2 rounded border border-slate-700 text-xs focus:outline-none focus:border-blue-500">
                     </div>
-                    <button type="button" @click="saveSupabaseConfig(); loginConfigOpen = false" 
-                            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 rounded text-[11px] transition">
-                        Salvar e Conectar Nuvem
-                    </button>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button type="button" @click="saveSupabaseConfig(); loginConfigOpen = false" 
+                                class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 rounded text-[11px] transition">
+                            Guardar e Ligar
+                        </button>
+                        <button type="button" @click="disconnectSupabase(); loginConfigOpen = false" 
+                                class="w-full bg-slate-800 hover:bg-slate-700 text-red-400 font-bold py-1.5 rounded text-[11px] transition">
+                            Forçar Modo Local
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <form @submit.prevent="login()" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Usuário</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Utilizador</label>
                     <div class="relative">
                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">👤</span>
-                        <input type="text" x-model="loginForm.username" required placeholder="Digite seu usuário..." 
+                        <input type="text" x-model="loginForm.username" required placeholder="Digite o utilizador..." 
                                class="w-full bg-slate-950 text-slate-200 pl-10 pr-4 py-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-blue-500 text-sm transition">
                     </div>
                 </div>
 
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Senha</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Palavra-passe</label>
                     <div class="relative">
                         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔑</span>
-                        <input type="password" x-model="loginForm.password" required placeholder="Digite sua senha..." 
+                        <input type="password" x-model="loginForm.password" required placeholder="Digite a palavra-passe..." 
                                class="w-full bg-slate-950 text-slate-200 pl-10 pr-4 py-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-blue-500 text-sm transition">
                     </div>
                 </div>
 
                 <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
-                    Entrar no Sistema
+                    Iniciar Sessão
                 </button>
             </form>
+            <div class="text-center">
+                <p class="text-[10px] text-slate-500">
+                    Credenciais padrão: <span class="font-bold text-slate-400">admin / admin</span>
+                </p>
+            </div>
         </div>
     </div>
 
@@ -177,20 +283,20 @@
                         <span>🔌</span> Pontos de Rede
                     </button>
                     <button @click="changeTab('cloud')" :class="currentTab === 'cloud' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
-                        <span>☁️</span> Configurações Nuvem
+                        <span>☁️</span> Configurações de Nuvem
                     </button>
                     <button x-show="currentUser.role === 'admin'" @click="changeTab('users')" :class="currentTab === 'users' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium" x-cloak>
-                        <span>👥</span> Usuários
+                        <span>👥</span> Utilizadores
                     </button>
                     <button @click="changeTab('logs')" :class="currentTab === 'logs' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
-                        <span>📝</span> Log de Auditoria
+                        <span>📝</span> Registo de Auditoria
                     </button>
                 </nav>
             </div>
 
             <!-- Rodapé da Sidebar com Identificação -->
             <div class="p-4 border-t border-slate-800 bg-slate-950">
-                <div class="text-xs text-slate-400 mb-2">Usuário Logado:</div>
+                <div class="text-xs text-slate-400 mb-2">Utilizador Iniciado:</div>
                 <div class="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg border border-slate-700">
                     <div class="flex flex-col">
                         <span class="text-xs font-bold uppercase tracking-wider text-slate-200" x-text="currentUser.username"></span>
@@ -220,18 +326,18 @@
                 <div class="flex items-center gap-4">
                     <div class="flex items-center gap-2">
                         <span class="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                        <span class="text-xs text-slate-400" x-text="isCloudSyncActive ? 'Sincronizado Nuvem' : 'Armazenamento Local'"></span>
+                        <span class="text-xs text-slate-400" x-text="isCloudSyncActive ? 'Sincronizado na Nuvem' : 'Armazenamento Local'"></span>
                     </div>
                 </div>
             </header>
 
             <div class="p-8 flex-1">
                 
-                <!-- Alerta se o usuário estiver em Modo Leitura -->
+                <!-- Alerta se o utilizador estiver em Modo Leitura -->
                 <div x-show="currentUser.role === 'read'" class="mb-6 bg-amber-950/40 border border-amber-800 text-amber-300 px-4 py-3 rounded-lg flex items-center gap-3 text-sm" x-cloak>
                     <span>🛡️</span>
                     <div>
-                        <strong class="font-bold">Modo de Leitura Ativado:</strong> Você pode visualizar toda a infraestrutura e dados, mas cadastros, importações e edições estão desabilitados.
+                        <strong class="font-bold">Modo de Leitura Ativado:</strong> Pode visualizar toda a infraestrutura e dados, mas os registos, importações e edições estão desabilitados.
                     </div>
                 </div>
 
@@ -350,7 +456,7 @@
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-bold text-white">Computadores e Ativos de Rede</h2>
-                            <p class="text-xs text-slate-400 mt-1">Gerencie as máquinas conectadas à infraestrutura.</p>
+                            <p class="text-xs text-slate-400 mt-1">Gerencie as máquinas ligadas à infraestrutura.</p>
                         </div>
                         <div class="flex gap-2">
                             <button @click="toggleLocalImport('devices')" :disabled="currentUser.role === 'read'"
@@ -361,7 +467,7 @@
                             <button @click="openDeviceModal()" :disabled="currentUser.role === 'read'"
                                     :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
                                     class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
-                                <span>➕</span> Cadastrar Computador
+                                <span>➕</span> Registar Computador
                             </button>
                         </div>
                     </div>
@@ -370,23 +476,22 @@
                     <div x-show="localImportPanel === 'devices'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de Computadores (Upload de Arquivo CSV)
+                                <span>📥</span> Importador de Computadores (Upload de Ficheiro CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
                         
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2 space-y-4">
-                                <!-- Seletor de Arquivos Drag-and-Drop Local -->
                                 <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
                                     <input type="file" accept=".csv" @change="handleCsvUpload($event, 'devices')" class="absolute inset-0 opacity-0 cursor-pointer">
                                     <span class="text-3xl mb-2">📥</span>
-                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste o seu ficheiro .csv</span>
                                     <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
                                 </div>
                                 
                                 <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
-                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                    <span>📎</span> Ficheiro selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
                                 </div>
 
                                 <div class="flex justify-between items-center text-xs">
@@ -396,9 +501,9 @@
                             </div>
                             <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
                                 <p class="font-bold text-white">Instruções:</p>
-                                <p>1. Selecione seu arquivo CSV clicando no painel pontilhado.</p>
-                                <p>2. O sistema detectará automaticamente as colunas disponíveis.</p>
-                                <p>3. Faça o mapeamento das colunas correspondentes e valide os registros abaixo.</p>
+                                <p>1. Selecione o seu ficheiro CSV clicando no painel pontilhado.</p>
+                                <p>2. O sistema detetará automaticamente as colunas disponíveis.</p>
+                                <p>3. Faça o mapeamento das colunas correspondentes e valide os registos abaixo.</p>
                             </div>
                         </div>
 
@@ -463,7 +568,7 @@
                             </div>
                             <div class="flex justify-end">
                                 <button @click="processCsvWithMappings('devices')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition">
-                                    Processar e Validar Registros
+                                    Processar e Validar Registos
                                 </button>
                             </div>
                         </div>
@@ -512,7 +617,7 @@
                                                                 :class="item.status === 'error' ? 'opacity-40 cursor-not-allowed bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-500'"
                                                                 class="px-2 py-1 rounded text-[10px] font-bold text-white transition">Importar</button>
                                                         <button @click="parsedImportItems = parsedImportItems.filter(p => p.id !== item.id)"
-                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Excluir</button>
+                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Eliminar</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -549,7 +654,7 @@
                                     <th class="p-4">Computador</th>
                                     <th class="p-4">Endereço IP</th>
                                     <th class="p-4">VLAN Associada</th>
-                                    <th class="p-4">Conexão Switch / Porta</th>
+                                    <th class="p-4">Ligação Switch / Porta</th>
                                     <th class="p-4">Ponto de Rede (Tomada)</th>
                                     <th class="p-4 text-right">Ações</th>
                                 </tr>
@@ -587,14 +692,14 @@
                                                 <button @click="confirmDeleteDevice(dev)" :disabled="currentUser.role === 'read'"
                                                         :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed' : 'text-red-500 hover:text-red-400 hover:bg-red-950/40 border border-transparent hover:border-red-900'"
                                                         class="text-xs px-2.5 py-1.5 rounded transition">
-                                                    Excluir
+                                                    Eliminar
                                                 </button>
                                             </div>
                                         </td>
                                     </tr>
                                 </template>
                                 <tr x-show="filteredDevicesList.length === 0">
-                                    <td colspan="6" class="p-8 text-center text-slate-500 font-medium">Nenhum computador cadastrado ou correspondente aos filtros.</td>
+                                    <td colspan="6" class="p-8 text-center text-slate-500 font-medium">Nenhum computador registado ou correspondente aos filtros.</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -606,7 +711,7 @@
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-bold text-white">VLANs e Subredes</h2>
-                            <p class="text-xs text-slate-400 mt-1">Configure as subredes lógicas de gerenciamento.</p>
+                            <p class="text-xs text-slate-400 mt-1">Configure as subredes lógicas de gestão.</p>
                         </div>
                         <div class="flex gap-2">
                             <button @click="toggleLocalImport('vlans')" :disabled="currentUser.role === 'read'"
@@ -617,7 +722,7 @@
                             <button @click="openVlanModal()" :disabled="currentUser.role === 'read'"
                                     :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
                                     class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
-                                <span>➕</span> Cadastrar VLAN
+                                <span>➕</span> Registar VLAN
                             </button>
                         </div>
                     </div>
@@ -626,21 +731,21 @@
                     <div x-show="localImportPanel === 'vlans'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de VLANs (Upload de Arquivo CSV)
+                                <span>📥</span> Importador de VLANs (Upload de Ficheiro CSV)
                             </h3>
-                            <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Panel ✖</button>
+                            <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div class="lg:col-span-2 space-y-4">
                                 <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
                                     <input type="file" accept=".csv" @change="handleCsvUpload($event, 'vlans')" class="absolute inset-0 opacity-0 cursor-pointer">
                                     <span class="text-3xl mb-2">📥</span>
-                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste o seu ficheiro .csv</span>
                                     <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
                                 </div>
 
                                 <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
-                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                    <span>📎</span> Ficheiro selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
                                 </div>
 
                                 <div class="flex justify-between items-center text-xs">
@@ -745,7 +850,7 @@
                                                                 :class="item.status === 'error' ? 'opacity-40 cursor-not-allowed bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-500'"
                                                                 class="px-2 py-1 rounded text-[10px] font-bold text-white transition border border-white/5">Importar</button>
                                                         <button @click="parsedImportItems = parsedImportItems.filter(p => p.id !== item.id)"
-                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Excluir</button>
+                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Eliminar</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -756,7 +861,7 @@
                         </div>
                     </div>
 
-                    <!-- Lista de VLANs Cadastradas -->
+                    <!-- Lista de VLANs Registadas -->
                     <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
                         <table class="w-full text-left text-sm">
                             <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
@@ -784,7 +889,7 @@
                                             <button @click="confirmDeleteVlan(vlan)" :disabled="currentUser.role === 'read'"
                                                     :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400'"
                                                     class="text-xs px-2.5 py-1.5 rounded transition font-medium">
-                                                Excluir
+                                                Eliminar
                                             </button>
                                         </td>
                                     </tr>
@@ -798,7 +903,7 @@
                 <div x-show="currentTab === 'ip'" class="space-y-6" x-cloak>
                     <div>
                         <h2 class="text-2xl font-bold text-white">Painel de IPs por VLAN (IPAM)</h2>
-                        <p class="text-xs text-slate-400 mt-1">Visualize e inspecione em tempo real todos os endereços IP de cada VLAN (Faixa autocalculada por CIDR).</p>
+                        <p class="text-xs text-slate-400 mt-1">Visualize e inspecione em tempo real todos os endereços IP de cada VLAN (Faixa autocalculada por CIDR e perfeitamente alinhada).</p>
                     </div>
 
                     <!-- Abas de seleção de VLAN -->
@@ -815,11 +920,12 @@
                         <div class="lg:col-span-2 bg-slate-950 p-6 rounded-xl border border-slate-800">
                             <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                                 <div>
-                                    <h3 class="text-md font-bold text-white" x-text="'Mapeamento de IP: ' + getVlanSubnet(selectedVlanId)"></h3>
+                                    <h3 class="text-md font-bold text-white" x-text="'Mapeamento de IP: ' + getVlanSubnet(selectedVlanId)"></h3 >
                                     <p class="text-xs text-slate-400">Selecione um bloco abaixo para obter detalhes de alocação física.</p>
                                 </div>
-                                <div class="flex items-center gap-3 text-xs">
+                                <div class="flex items-center gap-3 text-xs font-semibold">
                                     <span class="flex items-center gap-1.5 text-blue-400"><span class="h-3.5 w-3.5 bg-blue-600 rounded inline-block"></span> Ocupado</span>
+                                    <span class="flex items-center gap-1.5 text-amber-400"><span class="h-3.5 w-3.5 bg-amber-950/40 border border-amber-800 rounded inline-block"></span> Gateway</span>
                                     <span class="flex items-center gap-1.5 text-slate-500"><span class="h-3.5 w-3.5 bg-slate-800 border border-slate-700 rounded inline-block"></span> Disponível</span>
                                 </div>
                             </div>
@@ -885,7 +991,7 @@
                                     </div>
 
                                     <div class="bg-slate-900/50 p-4 text-xs text-slate-500 rounded-lg text-center" x-show="!selectedIpBlock">
-                                        Clique em um dos blocos de IP ao lado no mapa para analisar seus detalhes and vinculação física.
+                                        Clique em um dos blocos de IP ao lado no mapa para analisar os seus detalhes e vinculação física.
                                     </div>
                                 </div>
                             </div>
@@ -898,7 +1004,7 @@
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-bold text-white">Mapeamento Físico de Switches & Portas</h2>
-                            <p class="text-xs text-slate-400 mt-1">Gerencie a conexão física do cabeamento estruturado.</p>
+                            <p class="text-xs text-slate-400 mt-1">Gerencie a ligação física do cabeamento estruturado.</p>
                         </div>
                         <div class="flex gap-2">
                             <button @click="toggleLocalImport('switches')" :disabled="currentUser.role === 'read'"
@@ -918,7 +1024,7 @@
                     <div x-show="localImportPanel === 'switches'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de Switches de Rede (Upload de Arquivo CSV)
+                                <span>📥</span> Importador de Switches de Rede (Upload de Ficheiro CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
@@ -927,12 +1033,12 @@
                                 <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
                                     <input type="file" accept=".csv" @change="handleCsvUpload($event, 'switches')" class="absolute inset-0 opacity-0 cursor-pointer">
                                     <span class="text-3xl mb-2">📥</span>
-                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste o seu ficheiro .csv</span>
                                     <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
                                 </div>
 
                                 <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
-                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                    <span>📎</span> Ficheiro selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
                                 </div>
 
                                 <div class="flex justify-between items-center text-xs">
@@ -1037,7 +1143,7 @@
                                                                 :class="item.status === 'error' ? 'opacity-40 cursor-not-allowed bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-500'"
                                                                 class="px-2 py-1 rounded text-[10px] font-bold text-white transition">Importar</button>
                                                         <button @click="parsedImportItems = parsedImportItems.filter(p => p.id !== item.id)"
-                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Excluir</button>
+                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Eliminar</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1048,7 +1154,7 @@
                         </div>
                     </div>
 
-                    <!-- Lista de Switches Cadastrados -->
+                    <!-- Lista de Switches Registados -->
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <template x-for="sw in switches" :key="sw.id">
                             <div @click="selectedSwitchId = sw.id" 
@@ -1069,7 +1175,7 @@
                                         <button @click.stop="confirmDeleteSwitch(sw)" :disabled="currentUser.role === 'read'"
                                                 :class="currentUser.role === 'read' ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-800 text-red-500'"
                                                 class="p-1 rounded text-xs transition border border-slate-800 flex items-center justify-center bg-slate-900/40" 
-                                                title="Excluir Switch">
+                                                title="Eliminar Switch">
                                             ❌
                                         </button>
                                     </div>
@@ -1087,7 +1193,7 @@
                         <div class="flex justify-between items-center mb-6">
                             <div>
                                 <h3 class="text-lg font-bold text-white flex items-center gap-2" x-text="'Painel de Portas: ' + getSelectedSwitchName()"></h3>
-                                <p class="text-xs text-slate-400 mt-0.5">Clique em uma porta para detalhar conexões físicas.</p>
+                                <p class="text-xs text-slate-400 mt-0.5">Clique numa porta para detalhar conexões físicas.</p>
                             </div>
                             <div class="flex items-center gap-4 text-xs">
                                 <span class="flex items-center gap-1.5 text-emerald-400"><span class="h-3.5 w-3.5 rounded bg-emerald-600 border border-emerald-400 inline-block"></span> Ativa</span>
@@ -1164,7 +1270,7 @@
                             <button @click="openOutletModal()" :disabled="currentUser.role === 'read'"
                                     :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
                                     class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
-                                <span>➕</span> Cadastrar Tomada
+                                <span>➕</span> Registar Tomada
                             </button>
                         </div>
                     </div>
@@ -1173,7 +1279,7 @@
                     <div x-show="localImportPanel === 'outlets'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6" x-cloak>
                         <div class="flex justify-between items-center">
                             <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📥</span> Importador de Pontos de Rede (Upload de Arquivo CSV)
+                                <span>📥</span> Importador de Pontos de Rede (Upload de Ficheiro CSV)
                             </h3>
                             <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
                         </div>
@@ -1183,12 +1289,12 @@
                                 <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
                                     <input type="file" accept=".csv" @change="handleCsvUpload($event, 'outlets')" class="absolute inset-0 opacity-0 cursor-pointer">
                                     <span class="text-3xl mb-2">📥</span>
-                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste o seu ficheiro .csv</span>
                                     <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
                                 </div>
 
                                 <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
-                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                    <span>📎</span> Ficheiro selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
                                 </div>
 
                                 <div class="flex justify-between items-center text-xs">
@@ -1257,7 +1363,7 @@
                             </div>
                             <div class="flex justify-end">
                                 <button @click="processCsvWithMappings('outlets')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition">
-                                    Processar e Validar Registros
+                                    Processar e Validar Registos
                                 </button>
                             </div>
                         </div>
@@ -1303,7 +1409,7 @@
                                                                 :class="item.status === 'error' ? 'opacity-40 cursor-not-allowed bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-500'"
                                                                 class="px-2 py-1 rounded text-[10px] font-bold text-white transition">Importar</button>
                                                         <button @click="parsedImportItems = parsedImportItems.filter(p => p.id !== item.id)"
-                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Excluir</button>
+                                                                class="text-slate-400 hover:text-red-400 px-2 py-1 rounded text-[10px]">Eliminar</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1323,7 +1429,7 @@
                                     <th class="p-4">Localização / Sala</th>
                                     <th class="p-4">Switch e Porta Física</th>
                                     <th class="p-4">Status do Ponto</th>
-                                    <th class="p-4">Dispositivo Conectado</th>
+                                    <th class="p-4">Dispositivo Ligado</th>
                                     <th class="p-4 text-right">Ações</th>
                                 </tr>
                             </thead>
@@ -1363,7 +1469,7 @@
                                                 <button @click="confirmDeleteOutlet(outlet)" :disabled="currentUser.role === 'read'"
                                                         :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed' : 'text-red-500 hover:text-red-400 hover:bg-red-950/40 border border-transparent hover:border-red-900'"
                                                         class="text-xs px-2.5 py-1.5 rounded transition">
-                                                    Excluir
+                                                    Eliminar
                                                 </button>
                                             </div>
                                         </td>
@@ -1374,11 +1480,11 @@
                     </div>
                 </div>
 
-                <!-- ABA: Configurações Nuvem -->
+                <!-- ABA: Configurações de Nuvem -->
                 <div x-show="currentTab === 'cloud'" class="space-y-6" x-cloak>
                     <div>
                         <h2 class="text-2xl font-bold text-white">Sincronização na Nuvem (Supabase)</h2>
-                        <p class="text-xs text-slate-400 mt-1 font-sans">Conecte sua infraestrutura local NetMap a um banco relacional externo Supabase.</p>
+                        <p class="text-xs text-slate-400 mt-1 font-sans">Ligue a sua infraestrutura local NetMap a uma base de dados relacional externa do Supabase.</p>
                     </div>
 
                     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -1401,7 +1507,13 @@
                             </div>
                             <div class="flex flex-col gap-2 pt-2">
                                 <button @click="saveSupabaseConfig()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2 rounded text-xs transition">
-                                    Salvar Credenciais
+                                    Guardar Credenciais
+                                </button>
+                                <button @click="runDiagnostics()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-bold py-2 rounded text-xs transition flex items-center justify-center gap-1.5">
+                                    <span>🩺</span> Correr Diagnóstico de Tabelas
+                                </button>
+                                <button @click="openSqlModal()" class="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 py-2 rounded text-xs transition flex items-center justify-center gap-1.5">
+                                    <span>📜</span> Ver Script SQL Supabase
                                 </button>
                                 <button @click="disconnectSupabase()" x-show="isCloudSyncActive" class="w-full bg-slate-900 hover:bg-slate-800 text-red-400 border border-red-900/30 py-2 rounded text-xs transition" x-cloak>
                                     Desconectar Supabase
@@ -1412,30 +1524,37 @@
                         <!-- Opções de Sincronização -->
                         <div class="lg:col-span-2 bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-6">
                             <h3 class="text-md font-bold text-white flex items-center gap-2">
-                                <span>🔄</span> Central de Backup & Compartilhamento
+                                <span>🔄</span> Central de Cópia de Segurança & Partilha
                             </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
                                     <div>
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Sincronizar Dados</h4>
-                                        <p class="text-xs text-slate-400 mb-4">Exporta todo o seu mapeamento local para atualizar as tabelas na nuvem.</p>
+                                        <p class="text-xs text-slate-400 mb-4">Exporta todo o seu mapeamento local para atualizar ou substituir as tabelas na nuvem.</p>
                                     </div>
-                                    <button @click="pushToSupabase()" :disabled="!isCloudSyncActive || currentUser.role === 'read'"
-                                            :class="(!isCloudSyncActive || currentUser.role === 'read') ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-500' : 'bg-blue-600 hover:bg-blue-500 text-white font-semibold'"
-                                            class="w-full py-2 rounded text-xs transition">
-                                        Enviar para Nuvem (Backup)
-                                    </button>
+                                    <div class="flex flex-col gap-2">
+                                        <button @click="pushToSupabase()" :disabled="!isCloudSyncActive || currentUser.role === 'read'"
+                                                :class="(!isCloudSyncActive || currentUser.role === 'read') ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-500' : 'bg-blue-600 hover:bg-blue-500 text-white font-semibold'"
+                                                class="w-full py-2 rounded text-xs transition">
+                                            Enviar para Nuvem (Exportar / Backup)
+                                        </button>
+                                        <button @click="pullFromSupabase()" :disabled="!isCloudSyncActive"
+                                                :class="!isCloudSyncActive ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-500' : 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold'"
+                                                class="w-full py-2 rounded text-xs transition">
+                                            Puxar da Nuvem (Restaurar)
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
                                     <div>
-                                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Compartilhar com Equipe</h4>
-                                        <p class="text-xs text-slate-400 mb-4">Gere um link seguro de auto-configuração para os funcionários abrirem no PC deles.</p>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Partilhar com Equipa</h4>
+                                        <p class="text-xs text-slate-400 mb-4">Gere um link seguro de auto-configuração para os funcionários abrirem nos seus postos.</p>
                                     </div>
                                     <button @click="copyShareConfigLink()" :disabled="!isCloudSyncActive"
                                             :class="!isCloudSyncActive ? 'opacity-50 cursor-not-allowed bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold'"
                                             class="w-full py-2 rounded text-xs transition">
-                                        🔗 Copiar Link para Equipe
+                                        🔗 Copiar Link para Equipa
                                     </button>
                                 </div>
                             </div>
@@ -1443,15 +1562,15 @@
                     </div>
                 </div>
 
-                <!-- ABA: Usuários (Apenas Admin) -->
+                <!-- ABA: Utilizadores (Apenas Admin) -->
                 <div x-show="currentTab === 'users' && currentUser.role === 'admin'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
                         <div>
-                            <h2 class="text-2xl font-bold text-white">Controle de Acessos & Usuários</h2>
+                            <h2 class="text-2xl font-bold text-white">Controlo de Acessos & Utilizadores</h2>
                             <p class="text-xs text-slate-400 mt-1">Configure permissões de administradores e leitores.</p>
                         </div>
                         <button @click="openUserModal()" class="bg-blue-600 hover:bg-blue-700 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
-                            <span>➕</span> Novo Usuário
+                            <span>➕</span> Novo Utilizador
                         </button>
                     </div>
 
@@ -1459,7 +1578,7 @@
                         <table class="w-full text-left text-sm">
                             <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
                                 <tr>
-                                    <th class="p-4">Nome de Usuário</th>
+                                    <th class="p-4">Nome de Utilizador</th>
                                     <th class="p-4">Nível de Permissão</th>
                                     <th class="p-4 text-right">Ações</th>
                                 </tr>
@@ -1478,7 +1597,7 @@
                                                     :disabled="currentUser.id === usr.id"
                                                     :class="currentUser.id === usr.id ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400'"
                                                     class="text-xs px-2.5 py-1.5 rounded transition font-medium">
-                                                Excluir
+                                                Eliminar
                                             </button>
                                         </td>
                                     </tr>
@@ -1492,11 +1611,11 @@
                 <div x-show="currentTab === 'logs'" class="space-y-6" x-cloak>
                     <div class="flex justify-between items-center">
                         <div>
-                            <h2 class="text-2xl font-bold text-white">Log de Auditoria e Rastreabilidade</h2>
+                            <h2 class="text-2xl font-bold text-white">Histórico e Auditoria</h2>
                             <p class="text-xs text-slate-400 mt-1">Histórico completo de modificações de computadores, VLANs, IPs e switches.</p>
                         </div>
                         <button @click="confirmClearLogs()" :disabled="currentUser.role === 'read'"
-                                :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-600' : 'bg-slate-800 hover:bg-slate-700 text-red-400'"
+                                :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-600' : 'bg-slate-800 hover:bg-slate-700 text-red-400'"
                                 class="text-xs border border-slate-700 px-3 py-1.5 rounded-lg transition">
                             Limpar Histórico
                         </button>
@@ -1508,7 +1627,7 @@
                                 <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
                                     <tr>
                                         <th class="p-4">Data/Hora</th>
-                                        <th class="p-4">Usuário</th>
+                                        <th class="p-4">Utilizador</th>
                                         <th class="p-4">Ação</th>
                                         <th class="p-4">Descrição do Evento</th>
                                     </tr>
@@ -1540,31 +1659,31 @@
         </main>
     </div>
 
-    <!-- MODAL: Criar Usuário -->
+    <!-- MODAL: Criar Utilizador -->
     <div x-show="userModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative">
-            <h3 class="text-lg font-bold text-white mb-4">Adicionar Usuário</h3>
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Utilizador</h3>
             <form @submit.prevent="submitUserForm()" class="space-y-4">
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome de Usuário</label>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome de Utilizador</label>
                     <input type="text" x-model="userForm.username" required placeholder="Ex: bruno.sampaio" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Senha</label>
-                    <input type="password" x-model="userForm.password" required placeholder="Defina a senha..." 
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Palavra-passe</label>
+                    <input type="password" x-model="userForm.password" required placeholder="Defina a palavra-passe..." 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Permissão</label>
                     <select x-model="userForm.role" required class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                         <option value="read">Apenas Leitura (Somente Visualização)</option>
-                        <option value="admin">Administrador (Controle Total)</option>
+                        <option value="admin">Administrador (Controlo Total)</option>
                     </select>
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="userModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Cadastrar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Registar</button>
                 </div>
             </form>
         </div>
@@ -1578,7 +1697,7 @@
             <form @submit.prevent="submitDeviceForm()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome do Dispositivo</label>
-                    <input type="text" x-model="deviceForm.name" required placeholder="Ex: PC-DESENVOLVIMENTO-05" 
+                    <input type="text" x-model="deviceForm.name" required placeholder="Ex: PC-SUPORTE-05" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
@@ -1592,7 +1711,6 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
-                    <!-- Exibição Condicional de IP: Seletor Inteligente se houver VLAN, ou digitação manual se não houver -->
                     <template x-if="deviceForm.vlanId">
                         <select x-model="deviceForm.ip" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                             <option value="">-- Escolha um IP Disponível na VLAN --</option>
@@ -1630,7 +1748,7 @@
 
                 <div class="flex justify-end gap-3 pt-4">
                     <button type="button" @click="deviceModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Computador</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar Computador</button>
                 </div>
             </form>
         </div>
@@ -1645,7 +1763,7 @@
             <form @submit.prevent="submitEditDeviceForm()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome do Dispositivo</label>
-                    <input type="text" x-model="editDeviceForm.name" required placeholder="Ex: PC-DESENVOLVIMENTO-05" 
+                    <input type="text" x-model="editDeviceForm.name" required placeholder="Ex: PC-SUPORTE-05" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div>
@@ -1659,7 +1777,6 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
-                    <!-- Exibição Condicional de IP na Edição: Seletor Inteligente com resgate de IP da própria máquina -->
                     <template x-if="editDeviceForm.vlanId">
                         <select x-model="editDeviceForm.ip" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                             <option value="">-- Escolha um IP Disponível na VLAN --</option>
@@ -1701,7 +1818,7 @@
                     </button>
                     <div class="flex gap-3">
                         <button type="button" @click="editDeviceModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Alterações</button>
+                        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar Alterações</button>
                     </div>
                 </div>
             </form>
@@ -1711,7 +1828,7 @@
     <!-- MODAL: Criar VLAN -->
     <div x-show="vlanModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative">
-            <h3 class="text-lg font-bold text-white mb-4">Cadastrar Nova VLAN</h3>
+            <h3 class="text-lg font-bold text-white mb-4">Registar Nova VLAN</h3>
             <form @submit.prevent="submitVlanForm()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">ID da VLAN (Numérico)</label>
@@ -1735,7 +1852,7 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="vlanModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar VLAN</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar VLAN</button>
                 </div>
             </form>
         </div>
@@ -1768,7 +1885,7 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="switchModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Switch</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar Switch</button>
                 </div>
             </form>
         </div>
@@ -1801,7 +1918,7 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="editSwitchModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Alterações</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar Alterações</button>
                 </div>
             </form>
         </div>
@@ -1819,7 +1936,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
-                    <input type="text" x-model="outletForm.location" placeholder="Ex: Sala Financeiro - Mesa 2" 
+                    <input type="text" x-model="outletForm.location" placeholder="Ex: Sala Financeiro - Secretária 2" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
@@ -1847,7 +1964,7 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="outletModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Tomada</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar Tomada</button>
                 </div>
             </form>
         </div>
@@ -1865,7 +1982,7 @@
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
-                    <input type="text" x-model="editOutletForm.location" placeholder="Ex: Sala Financeiro - Mesa 2" 
+                    <input type="text" x-model="editOutletForm.location" placeholder="Ex: Sala Financeiro - Secretária 2" 
                            class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
@@ -1893,7 +2010,7 @@
                 </div>
                 <div class="flex justify-end gap-3 pt-2">
                     <button type="button" @click="editOutletModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Alterações</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Guardar Alterações</button>
                 </div>
             </form>
         </div>
@@ -1903,7 +2020,7 @@
         function netMapApp() {
             // ==========================================
             // CONFIGURAÇÕES PADRÃO (OPCIONAIS)
-            // Preencha aqui suas chaves se quiser embutir permanentemente no código:
+            // Preencha aqui as suas chaves se quiser embutir permanentemente no código:
             const DEFAULT_SUPABASE_URL = ""; 
             const DEFAULT_SUPABASE_KEY = "";
             // ==========================================
@@ -1930,6 +2047,9 @@
                 switchModalOpen: false,
                 editSwitchModalOpen: false,
                 userModalOpen: false,
+                sqlModalOpen: false,
+                diagnosticModalOpen: false,
+                diagnosticReport: [],
 
                 // Coleções Ativas de Dados
                 vlans: [],
@@ -1971,7 +2091,7 @@
                 localImportPanel: null,
                 csvText: '',
                 csvHeaders: [],
-                csvMappings: {},
+                csvMappings: { name: 0, ip: 1, vlanId: 2, switchName: 3, port: 4, outlet: 5 },
                 parsedImportItems: [],
                 uploadedFileName: '',
 
@@ -1981,10 +2101,153 @@
                     this.checkSharedConfigLink();
                     this.restoreSupabaseConfig();
 
-                    // Se estiver conectado à nuvem, baixa os usuários em segundo plano imediatamente para liberar o login
+                    // Se estiver ligado à nuvem, baixa os utilizadores em segundo plano imediatamente para libertar o login
                     if (this.isCloudSyncActive) {
                         await this.pullUsersOnLoad();
                     }
+                },
+
+                // Script SQL para facilitar configuração do utilizador no Supabase
+                getSqlScript() {
+                    return `-- -------------------------------------------------------------
+-- SCRIPT SQL DE INICIALIZAÇÃO DO NETMAP MANAGER
+-- Cole este script no 'SQL Editor' do Supabase e clique em 'Run'
+-- -------------------------------------------------------------
+
+-- 1. Criar tabela de VLANs
+CREATE TABLE IF NOT EXISTS public.netmap_vlans (
+    id BIGINT PRIMARY KEY,
+    name TEXT NOT NULL,
+    subnet TEXT,
+    gateway TEXT
+);
+
+-- 2. Criar tabela de Switches
+CREATE TABLE IF NOT EXISTS public.netmap_switches (
+    id BIGINT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    model TEXT,
+    "totalPorts" BIGINT DEFAULT 24,
+    location TEXT
+);
+
+-- 3. Criar tabela de Pontos de Rede (Tomadas)
+CREATE TABLE IF NOT EXISTS public.netmap_outlets (
+    id BIGINT PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL,
+    location TEXT,
+    "switchName" TEXT,
+    port BIGINT,
+    status TEXT DEFAULT 'Ativo'
+);
+
+-- 4. Criar tabela de Dispositivos (Computadores)
+CREATE TABLE IF NOT EXISTS public.netmap_devices (
+    id BIGINT PRIMARY KEY,
+    name TEXT NOT NULL,
+    ip TEXT,
+    "vlanId" BIGINT,
+    "switchName" TEXT,
+    port BIGINT,
+    outlet TEXT
+);
+
+-- 5. Criar tabela de Utilizadores
+CREATE TABLE IF NOT EXISTS public.netmap_users (
+    id BIGINT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password TEXT NOT NULL,
+    role TEXT DEFAULT 'read'
+);
+
+-- 6. Criar tabela de Logs de Auditoria
+CREATE TABLE IF NOT EXISTS public.netmap_logs (
+    id BIGINT PRIMARY KEY,
+    timestamp TEXT NOT NULL,
+    "user" TEXT,
+    role TEXT,
+    action TEXT,
+    details TEXT
+);
+
+-- 7. Inserir utilizadores padrão para login imediato
+INSERT INTO public.netmap_users (id, username, password, role)
+VALUES 
+    (1, 'admin', 'admin', 'admin'),
+    (2, 'leitor', '123', 'read')
+ON CONFLICT (username) DO NOTHING;
+
+-- 8. Desativar RLS (Row Level Security) para teste rápido sem restrições
+ALTER TABLE public.netmap_vlans DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.netmap_switches DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.netmap_outlets DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.netmap_devices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.netmap_users DISABLE ROW LEVEL SECURITY;
+ALTER TABLE public.netmap_logs DISABLE ROW LEVEL SECURITY;`;
+                },
+
+                copySqlScript() {
+                    try {
+                        const tempInput = document.createElement('textarea');
+                        tempInput.value = this.getSqlScript();
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+                        this.addToast('Script SQL copiado com sucesso!', 'success');
+                    } catch (e) {
+                        this.addToast('Erro ao copiar o script SQL.', 'error');
+                    }
+                },
+
+                openSqlModal() {
+                    this.sqlModalOpen = true;
+                },
+
+                // Diagnóstico nativo completo do estado do Supabase sem utilizar "alert" do navegador
+                async runDiagnostics() {
+                    if (!this.supabaseClient) {
+                        this.addToast("Supabase não configurado.", "error");
+                        return;
+                    }
+                    this.diagnosticReport = [];
+                    this.diagnosticModalOpen = true;
+                    this.addToast("A iniciar teste de ligação...", "warning");
+
+                    const tables = [
+                        { name: 'netmap_users', label: 'Utilizadores' },
+                        { name: 'netmap_vlans', label: 'VLANs' },
+                        { name: 'netmap_switches', label: 'Switches' },
+                        { name: 'netmap_outlets', label: 'Tomadas' },
+                        { name: 'netmap_devices', label: 'Computadores' },
+                        { name: 'netmap_logs', label: 'Logs' }
+                    ];
+
+                    for (const tbl of tables) {
+                        try {
+                            const { data, error, status } = await this.supabaseClient.from(tbl.name).select('*').limit(1);
+                            if (error) {
+                                this.diagnosticReport.push({
+                                    table: tbl.label,
+                                    status: 'ERRO',
+                                    details: `Tabela inacessível (Código ${status}): ${error.message}. Execute o script SQL no Supabase para criar a tabela e desativar o RLS.`
+                                });
+                            } else {
+                                this.diagnosticReport.push({
+                                    table: tbl.label,
+                                    status: 'OK',
+                                    details: `Ligação bem sucedida! Registos mapeados na nuvem: ${data && data.length > 0 ? 'Sim' : 'Tabela vazia'}.`
+                                });
+                            }
+                        } catch (err) {
+                            this.diagnosticReport.push({
+                                table: tbl.label,
+                                status: 'FALHA',
+                                details: `Erro de ligação crítico: ${err.message}`
+                            });
+                        }
+                    }
+                    this.addLog('DIAGNOSTIC', 'Executou diagnóstico de tabelas Supabase.');
                 },
 
                 // Verifica se o funcionário abriu a página usando um link de autoconfiguração gerado pelo admin
@@ -2000,8 +2263,6 @@
                                 this.supabaseConfig = parsed;
                                 localStorage.setItem('netmap_supabase_config', JSON.stringify(this.supabaseConfig));
                                 this.addToast('Configurações do Supabase importadas automaticamente!', 'success');
-                                
-                                // Limpa o hash da URL para manter a barra limpa
                                 window.history.replaceState(null, null, window.location.pathname);
                             }
                         }
@@ -2029,7 +2290,7 @@
                         this.loadDefaultDemoData();
                     }
 
-                    // Garantia absoluta de usuários padrões caso estejam ausentes no cache local
+                    // Garantia absoluta de utilizadores padrões caso estejam ausentes no cache local
                     if (!this.users || this.users.length === 0) {
                         this.users = [
                             { id: 1, username: "admin", password: "admin", role: "admin" },
@@ -2060,8 +2321,8 @@
 
                     this.outlets = [
                         { id: 201, name: "T-101", location: "Sala do Financeiro - Mesa 1", switchName: "SW-01", port: 5, status: "Ativo" },
-                        { id: 202, name: "T-102", location: "Sala da Diretoria", switchName: "SW-01", port: 8, status: "Ativo" },
-                        { id: 203, name: "T-201", location: "Galpão Principal - Posto 1", switchName: "SW-02", port: 3, status: "Ativo" },
+                        { id: 202, name: "T-102", location: "Sala da Direção", switchName: "SW-01", port: 8, status: "Ativo" },
+                        { id: 203, name: "T-201", location: "Armazém Principal - Posto 1", switchName: "SW-02", port: 3, status: "Ativo" },
                         { id: 204, name: "C-01", location: "Entrada Principal", switchName: "SW-01", port: 12, status: "Ativo" }
                     ];
 
@@ -2071,7 +2332,7 @@
                     ];
 
                     this.logs = [
-                        { id: 1, timestamp: this.getCurrentTime(), user: "Sistema", role: "admin", action: "SYSTEM", details: "Banco de dados initialized com dados de demonstração." }
+                        { id: 1, timestamp: this.getCurrentTime(), user: "Sistema", role: "admin", action: "SYSTEM", details: "Base de dados inicializada com dados de demonstração." }
                     ];
 
                     this.saveVlans();
@@ -2097,13 +2358,25 @@
                     }
                 },
 
+                // Ignora o erro da nuvem e permite logar com as credenciais locais padrões
+                forceLocalBypass() {
+                    this.users = [
+                        { id: 1, username: "admin", password: "admin", role: "admin" },
+                        { id: 2, username: "leitor", password: "123", role: "read" }
+                    ];
+                    this.saveUsers();
+                    this.loginForm.username = 'admin';
+                    this.loginForm.password = 'admin';
+                    this.login();
+                },
+
                 login() {
                     const match = this.users.find(u => u.username.trim().toLowerCase() === this.loginForm.username.trim().toLowerCase() && u.password === this.loginForm.password);
                     if (match) {
                         this.currentUser = { id: match.id, username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
                         this.isLoggedIn = true;
-                        this.addLog('LOGIN', `Usuário ${match.username} realizou autenticação com sucesso.`);
+                        this.addLog('LOGIN', `Utilizador ${match.username} realizou autenticação com sucesso.`);
                         this.addToast('Bem-vindo ao NetMap PRO!', 'success');
                         this.loginForm = { username: '', password: '' };
                         
@@ -2112,12 +2385,22 @@
                             this.pullDataSilently();
                         }
                     } else {
-                        this.addToast('Usuário ou senha incorretos!', 'error');
+                        // Força fallback inteligente se as credenciais digitadas corresponderem aos administradores de emergência simulados localmente
+                        if (this.loginForm.username === 'admin' && this.loginForm.password === 'admin') {
+                            this.currentUser = { id: 1, username: "admin", role: "admin" };
+                            localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
+                            this.isLoggedIn = true;
+                            this.addLog('LOGIN', 'Administrador autenticado via modo de bypass local.');
+                            this.addToast('Autenticado com sucesso via base de dados local (Modo de Emergência)!', 'warning');
+                            this.loginForm = { username: '', password: '' };
+                        } else {
+                            this.addToast('Utilizador ou palavra-passe incorretos!', 'error');
+                        }
                     }
                 },
 
                 logout() {
-                    this.addLog('LOGOUT', `Usuário ${this.currentUser.username} desconectou.`);
+                    this.addLog('LOGOUT', `Utilizador ${this.currentUser.username} desconectou.`);
                     localStorage.removeItem('netmap_session');
                     this.currentUser = { id: null, username: '', role: 'read' };
                     this.isLoggedIn = false;
@@ -2218,46 +2501,44 @@
                     return match ? match.gateway : 'N/A';
                 },
 
+                // Otimizado: Filtro de cálculo matemático absoluto de subredes para evitar IPs de rede/broadcast inválidos
                 getVlanIps(vlanId) {
                     const vlan = this.vlans.find(v => v.id === parseInt(vlanId));
-                    if (!vlan || !vlan.gateway) return [];
+                    if (!vlan || !vlan.subnet || !vlan.gateway) return [];
 
-                    const gwBytes = vlan.gateway.split('.').map(Number);
-                    if (gwBytes.length !== 4 || gwBytes.some(isNaN)) return [];
+                    const subnetParts = vlan.subnet.split('/');
+                    const subnetIp = subnetParts[0].trim();
+                    const cidr = subnetParts[1] ? parseInt(subnetParts[1].trim(), 10) : 24;
 
-                    const parts = vlan.subnet.split('/');
-                    const cidr = parts[1] ? parseInt(parts[1].trim(), 10) : 24;
+                    const ipBytes = subnetIp.split('.').map(Number);
+                    if (ipBytes.length !== 4 || ipBytes.some(isNaN)) return [];
 
-                    const capacity = Math.pow(2, 32 - cidr) - 2;
+                    // Converte o IP para um número de 32 bits usando aritmética segura para evitar estouro de sinal
+                    const ipNum = (ipBytes[0] * 16777216) + (ipBytes[1] * 65536) + (ipBytes[2] * 256) + ipBytes[3];
+                    const numHosts = Math.pow(2, 32 - cidr);
+                    
+                    // Alinha o IP de acordo com a máscara de rede (endereço da rede)
+                    const networkNum = Math.floor(ipNum / numHosts) * numHosts;
+                    const broadcastNum = networkNum + numHosts - 1;
+
                     const ipList = [];
 
-                    ipList.push({
-                        fullIp: vlan.gateway,
-                        label: 'GW',
-                        isGateway: true
-                    });
-
-                    const gwNum = (gwBytes[0] * 16777216) + (gwBytes[1] * 65536) + (gwBytes[2] * 256) + gwBytes[3];
-
-                    for (let i = 1; i <= capacity; i++) {
-                        const currentIpNum = gwNum + i;
-
+                    // Adiciona os IPs utilizáveis (ignora o endereço da rede e o endereço de broadcast)
+                    // Por exemplo, numa rede /24, vai de networkNum + 1 até broadcastNum - 1 (.1 a .254)
+                    for (let currentIpNum = networkNum + 1; currentIpNum < broadcastNum; currentIpNum++) {
                         const octet1 = Math.floor(currentIpNum / 16777216) % 256;
                         const octet2 = Math.floor(currentIpNum / 65536) % 256;
                         const octet3 = Math.floor(currentIpNum / 256) % 256;
                         const octet4 = currentIpNum % 256;
 
-                        if (cidr <= 24 && octet4 === 255) {
-                            continue;
-                        }
-
                         const fullIp = `${octet1}.${octet2}.${octet3}.${octet4}`;
                         const label = `.${octet4}`;
+                        const isGateway = (fullIp === vlan.gateway);
 
                         ipList.push({
-                            fullIp: fullIp,
-                            label: label,
-                            isGateway: false
+                            fullIp,
+                            label,
+                            isGateway
                         });
                     }
                     return ipList;
@@ -2405,7 +2686,7 @@
                     if (this.currentUser.role === 'read') return;
                     const idInt = parseInt(this.vlanForm.id);
                     if (this.vlans.some(v => v.id === idInt)) {
-                        this.addToast('ID de VLAN já cadastrado.', 'error');
+                        this.addToast('ID de VLAN já registado.', 'error');
                         return;
                     }
                     const newVlan = {
@@ -2418,7 +2699,7 @@
                     this.vlans = [...this.vlans];
                     this.saveVlans();
                     this.addLog('CREATE', `Criou VLAN ${newVlan.id} - ${newVlan.name}`);
-                    this.addToast('VLAN cadastrada!', 'success');
+                    this.addToast('VLAN registada!', 'success');
                     this.vlanModalOpen = false;
                 },
 
@@ -2439,8 +2720,8 @@
                     this.outlets.push(newOutlet);
                     this.outlets = [...this.outlets];
                     this.saveOutlets();
-                    this.addLog('CREATE', `Cadastrou Tomada ${newOutlet.name}.`);
-                    this.addToast('Tomada cadastrada!', 'success');
+                    this.addLog('CREATE', `Registou Tomada ${newOutlet.name}.`);
+                    this.addToast('Tomada registada!', 'success');
                     this.outletModalOpen = false;
                 },
 
@@ -2489,7 +2770,7 @@
 
                 submitUserForm() {
                     if (this.users.some(u => u.username.toLowerCase() === this.userForm.username.toLowerCase().trim())) {
-                        this.addToast('Nome de usuário já existe.', 'error');
+                        this.addToast('Nome de utilizador já existe.', 'error');
                         return;
                     }
                     const newUser = {
@@ -2501,8 +2782,8 @@
                     this.users.push(newUser);
                     this.users = [...this.users];
                     this.saveUsers();
-                    this.addLog('CREATE', `Criou usuário ${newUser.username}.`);
-                    this.addToast('Usuário cadastrado com sucesso!', 'success');
+                    this.addLog('CREATE', `Criou utilizador ${newUser.username}.`);
+                    this.addToast('Utilizador registado com sucesso!', 'success');
                     this.userModalOpen = false;
                 },
 
@@ -2514,7 +2795,7 @@
 
                 async confirmDeleteDevice(dev) {
                     if (this.currentUser.role === 'read') return;
-                    const res = await this.openConfirm('Excluir Ativo', `Deseja realmente excluir o computador ${dev.name}?`);
+                    const res = await this.openConfirm('Eliminar Ativo', `Deseja realmente eliminar o computador ${dev.name}?`);
                     if (res) {
                         this.devices = this.devices.filter(d => d.id !== dev.id);
                         this.devices = [...this.devices];
@@ -2526,7 +2807,7 @@
 
                 async confirmDeleteVlan(vlan) {
                     if (this.currentUser.role === 'read') return;
-                    const res = await this.openConfirm('Excluir VLAN', `Deseja realmente excluir a VLAN ${vlan.id}? Todos os computadores desta VLAN perderão associação.`);
+                    const res = await this.openConfirm('Eliminar VLAN', `Deseja realmente eliminar a VLAN ${vlan.id}? Todos os computadores desta VLAN perderão a associação.`);
                     if (res) {
                         this.vlans = this.vlans.filter(v => v.id !== vlan.id);
                         this.devices.forEach(d => {
@@ -2536,13 +2817,13 @@
                         this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu VLAN ${vlan.id}.`);
-                        this.addToast('VLAN excluída.', 'success');
+                        this.addToast('VLAN eliminada.', 'success');
                     }
                 },
 
                 async confirmDeleteSwitch(sw) {
                     if (this.currentUser.role === 'read') return;
-                    const res = await this.openConfirm('Excluir Switch', `Deseja realmente excluir o switch ${sw.name}? Dispositivos conectados serão liberados.`);
+                    const res = await this.openConfirm('Eliminar Switch', `Deseja realmente eliminar o switch ${sw.name}? Os dispositivos ligados serão libertados.`);
                     if (res) {
                         this.switches = this.switches.filter(s => s.id !== sw.id);
                         this.devices.forEach(d => {
@@ -2562,23 +2843,23 @@
 
                 async confirmDeleteOutlet(outlet) {
                     if (this.currentUser.role === 'read') return;
-                    const res = await this.openConfirm('Excluir Tomada', `Deseja realmente excluir a tomada ${outlet.name}?`);
+                    const res = await this.openConfirm('Eliminar Tomada', `Deseja realmente eliminar a tomada ${outlet.name}?`);
                     if (res) {
                         this.outlets = this.outlets.filter(o => o.id !== outlet.id);
                         this.saveOutlets();
                         this.addLog('DELETE', `Removeu Tomada ${outlet.name}.`);
-                        this.addToast('Tomada excluída.', 'success');
+                        this.addToast('Tomada eliminada.', 'success');
                     }
                 },
 
                 async confirmDeleteUser(usr) {
                     if (this.currentUser.id === usr.id) return;
-                    const res = await this.openConfirm('Excluir Usuário', `Deseja excluir permanentemente o usuário ${usr.username}?`);
+                    const res = await this.openConfirm('Eliminar Utilizador', `Deseja eliminar permanentemente o utilizador ${usr.username}?`);
                     if (res) {
                         this.users = this.users.filter(u => u.id !== usr.id);
                         this.saveUsers();
-                        this.addLog('DELETE', `Removeu usuário ${usr.username}.`);
-                        this.addToast('Usuário removido.', 'success');
+                        this.addLog('DELETE', `Removeu o utilizador ${usr.username}.`);
+                        this.addToast('Utilizador removido.', 'success');
                     }
                 },
 
@@ -2600,7 +2881,7 @@
                 resetCsvImportState() {
                     this.csvText = '';
                     this.csvHeaders = [];
-                    this.csvMappings = {};
+                    this.csvMappings = { name: 0, ip: 1, vlanId: 2, switchName: 3, port: 4, outlet: 5 };
                     this.parsedImportItems = [];
                     this.uploadedFileName = '';
                 },
@@ -2627,7 +2908,7 @@
                     if (lines.length > 0) {
                         const separator = lines[0].includes(';') ? ';' : ',';
                         this.csvHeaders = lines[0].split(separator).map(h => h.replace(/"/g, '').trim());
-                        this.addToast('Arquivo carregado e colunas analisadas com sucesso. Realize o mapeamento abaixo.', 'success');
+                        this.addToast('Ficheiro carregado e colunas analisadas com sucesso. Realize o mapeamento abaixo.', 'success');
                     }
                 },
 
@@ -2639,7 +2920,7 @@
                         this.csvText = "ID_Vlan,Nome_Vlan,Subrede,Gateway\n40,CFTV Interno,192.168.40.0/24,192.168.40.1\n50,Rede Convidados,192.168.50.0/28,192.168.50.1";
                         this.uploadedFileName = "exemplo_vlans.csv";
                     } else if (type === 'switches') {
-                        this.csvText = "Nome_Switch,Modelo,TotalPortas,RackLocal\nSW-03,Dell Networking,24,Rack Sala Diretoria\nSW-04,Cisco SG350,48,Rack TI";
+                        this.csvText = "Nome_Switch,Modelo,TotalPortas,RackLocal\nSW-03,Dell Networking,24,Rack Sala CPD\nSW-04,Cisco SG350,48,Rack TI";
                         this.uploadedFileName = "exemplo_switches.csv";
                     } else if (type === 'outlets') {
                         this.csvText = "Identificacao,Sala,Switch,Porta,Status\nT-105,Sala CPD Desk,SW-01,20,Ativo\nT-205,Recepção,SW-02,22,Ativo";
@@ -2651,7 +2932,7 @@
                 processCsvWithMappings(type) {
                     const lines = this.csvText.split('\n').filter(l => l.trim() !== '');
                     if (lines.length <= 1) {
-                        this.addToast('Sem linhas de dados o suficiente.', 'error');
+                        this.addToast('Sem linhas de dados suficientes.', 'error');
                         return;
                     }
                     const separator = lines[0].includes(';') ? ';' : ',';
@@ -2689,7 +2970,7 @@
                             let status = 'ready';
                             let errorMsg = '';
                             if (!itemData.id) { status = 'error'; errorMsg = 'ID da VLAN obrigatório.'; }
-                            else if (this.vlans.some(v => v.id === itemData.id)) { status = 'error'; errorMsg = 'ID da VLAN já cadastrado.'; }
+                            else if (this.vlans.some(v => v.id === itemData.id)) { status = 'error'; errorMsg = 'ID da VLAN já registado.'; }
                             this.parsedImportItems.push({ id: i, rawLine: row, data: itemData, status, errorMsg });
                         }
 
@@ -2780,7 +3061,7 @@
                     this.resetCsvImportState();
                     this.localImportPanel = null;
                     this.addLog('IMPORT', `Importação CSV em massa realizada para ${type}.`);
-                    this.addToast('Todos os registros válidos foram importados!', 'success');
+                    this.addToast('Todos os registos válidos foram importados!', 'success');
                 },
 
                 restoreSupabaseConfig() {
@@ -2809,13 +3090,14 @@
                 connectToSupabase() {
                     if (typeof supabase === 'undefined') {
                         this.isCloudSyncActive = false;
-                        this.supabaseLoadError = "Biblioteca Supabase JS não carregou ou foi bloqueada.";
+                        this.supabaseLoadError = "A biblioteca Supabase JS não carregou ou foi bloqueada.";
                         console.warn("Biblioteca Supabase JS não pôde ser carregada ou foi bloqueada.");
                         return;
                     }
                     try {
                         this.supabaseClient = supabase.createClient(this.supabaseConfig.url, this.supabaseConfig.key);
                         this.isCloudSyncActive = true;
+                        this.supabaseLoadError = "";
                     } catch (e) {
                         this.isCloudSyncActive = false;
                         this.supabaseLoadError = "Erro na inicialização do cliente Supabase.";
@@ -2829,10 +3111,12 @@
                     this.supabaseClient = null;
                     this.isCloudSyncActive = false;
                     this.cloudUserCount = 0;
-                    this.addToast('Desconectado do Supabase.', 'warning');
+                    this.supabaseLoadError = "";
+                    this.restoreLocalDatabase(); // Restaura banco local ao desconectar
+                    this.addToast('Desconectado do Supabase. A operar em modo de armazenamento local!', 'warning');
                 },
 
-                // Sincroniza a lista de usuários antes do login para que o funcionário consiga logar imediatamente
+                // Sincroniza a lista de utilizadores antes do login para que o funcionário consiga logar imediatamente
                 async pullUsersOnLoad() {
                     if (!this.supabaseClient) {
                         this.supabaseLoadError = "Conexão remota não inicializada.";
@@ -2847,13 +3131,13 @@
                             this.users = users;
                             this.saveUsers();
                             this.cloudUserCount = users.length;
-                            this.addToast(`${users.length} contas de usuário sincronizadas!`, 'success');
+                            this.addToast(`${users.length} utilizadores sincronizados!`, 'success');
                         } else {
-                            this.supabaseLoadError = "Tabela de usuários remota vazia ou inacessível.";
+                            this.supabaseLoadError = "Tabela de utilizadores remota vazia ou inacessível. (Verifique as tabelas e as políticas RLS usando o script SQL)";
                         }
                     } catch (e) {
-                        console.warn("Background Sync: Falha ao baixar lista de usuários.", e);
-                        this.supabaseLoadError = e.message || "Erro de conexão remota. Verifique a internet e o banco.";
+                        console.warn("Background Sync: Falha ao baixar lista de utilizadores.", e);
+                        this.supabaseLoadError = e.message || "Erro de ligação remota. Verifique a internet, tabelas e políticas RLS.";
                     } finally {
                         this.isConnectingCloud = false;
                     }
@@ -2885,7 +3169,7 @@
                     }
                 },
 
-                // Copia um link com a criptografia base64 das credenciais do Supabase para enviar à equipe
+                // Copia um link com a criptografia base64 das credenciais do Supabase para enviar à equipa
                 copyShareConfigLink() {
                     if (!this.isCloudSyncActive) return;
                     try {
@@ -2903,45 +3187,46 @@
                         document.execCommand('copy');
                         document.body.removeChild(tempInput);
 
-                        this.addToast('Link de autoconfiguração copiado! Envie-o para seus funcionários.', 'success');
+                        this.addToast('Link de autoconfiguração copiado! Envie-o aos seus funcionários.', 'success');
                     } catch (e) {
-                        this.addToast('Erro ao gerar link de compartilhamento.', 'error');
+                        this.addToast('Erro ao gerar link de partilha.', 'error');
                     }
                 },
 
                 async pushToSupabase() {
                     if (!this.isCloudSyncActive || this.currentUser.role === 'read') return;
-                    this.addToast('Enviando dados locais para o Supabase...', 'warning');
+                    this.addToast('A enviar dados locais para o Supabase...', 'warning');
 
                     try {
-                        await this.supabaseClient.from('netmap_vlans').delete().neq('id', 0);
-                        await this.supabaseClient.from('netmap_vlans').insert(this.vlans);
+                        await this.supabaseClient.from('netmap_vlans').delete().gt('id', -1);
+                        if (this.vlans.length > 0) await this.supabaseClient.from('netmap_vlans').insert(this.vlans);
 
-                        await this.supabaseClient.from('netmap_switches').delete().neq('id', 0);
-                        await this.supabaseClient.from('netmap_switches').insert(this.switches);
+                        await this.supabaseClient.from('netmap_switches').delete().gt('id', -1);
+                        if (this.switches.length > 0) await this.supabaseClient.from('netmap_switches').insert(this.switches);
 
-                        await this.supabaseClient.from('netmap_outlets').delete().neq('id', 0);
-                        await this.supabaseClient.from('netmap_outlets').insert(this.outlets);
+                        await this.supabaseClient.from('netmap_outlets').delete().gt('id', -1);
+                        if (this.outlets.length > 0) await this.supabaseClient.from('netmap_outlets').insert(this.outlets);
 
-                        await this.supabaseClient.from('netmap_devices').delete().neq('id', 0);
-                        await this.supabaseClient.from('netmap_devices').insert(this.devices);
+                        await this.supabaseClient.from('netmap_devices').delete().gt('id', -1);
+                        if (this.devices.length > 0) await this.supabaseClient.from('netmap_devices').insert(this.devices);
 
-                        await this.supabaseClient.from('netmap_users').delete().neq('id', 0);
-                        await this.supabaseClient.from('netmap_users').insert(this.users);
+                        await this.supabaseClient.from('netmap_users').delete().gt('id', -1);
+                        if (this.users.length > 0) await this.supabaseClient.from('netmap_users').insert(this.users);
 
-                        await this.supabaseClient.from('netmap_logs').delete().neq('id', 0);
-                        await this.supabaseClient.from('netmap_logs').insert(this.logs);
+                        await this.supabaseClient.from('netmap_logs').delete().gt('id', -1);
+                        if (this.logs.length > 0) await this.supabaseClient.from('netmap_logs').insert(this.logs);
 
                         this.addToast('Exportado para a nuvem com sucesso!', 'success');
                         this.addLog('SYNC', 'Exportou base de dados local para a nuvem.');
                     } catch (err) {
-                        this.addToast('Erro ao exportar tabelas. Verifique seu schema SQL.', 'error');
+                        console.error(err);
+                        this.addToast('Erro ao exportar tabelas. Verifique a internet e o schema SQL no Supabase.', 'error');
                     }
                 },
 
                 async pullFromSupabase() {
                     if (!this.isCloudSyncActive) return;
-                    this.addToast('Baixando dados da nuvem...', 'warning');
+                    this.addToast('A descarregar dados da nuvem...', 'warning');
 
                     try {
                         const { data: vlans } = await this.supabaseClient.from('netmap_vlans').select('*');
@@ -2965,7 +3250,7 @@
                         this.saveUsers();
                         this.saveLogs();
 
-                        this.addToast('Banco local restaurado da nuvem!', 'success');
+                        this.addToast('Base de dados local restaurada a partir da nuvem!', 'success');
                         this.addLog('SYNC', 'Restaurou base de dados a partir da nuvem.');
                     } catch (err) {
                         this.addToast('Falha ao obter tabelas do Supabase.', 'error');
@@ -2974,7 +3259,7 @@
 
                 getCurrentTime() {
                     const now = new Date();
-                    return now.toLocaleString('pt-BR');
+                    return now.toLocaleString('pt-PT');
                 },
 
                 changeTab(tab) {
@@ -3037,8 +3322,8 @@
                     this.devices.push(newDevice);
                     this.devices = [...this.devices];
                     this.saveDevices();
-                    this.addLog('CREATE', `Cadastrou o computador: ${newDevice.name}`);
-                    this.addToast('Dispositivo cadastrado com sucesso!', 'success');
+                    this.addLog('CREATE', `Registou o computador: ${newDevice.name}`);
+                    this.addToast('Dispositivo registado com sucesso!', 'success');
                     this.deviceModalOpen = false;
                 },
 
@@ -3084,7 +3369,7 @@
                         this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('UPDATE', `Editou o computador: ${device.name}`);
-                        this.addToast('Dispositivo cadastrado com sucesso!', 'success');
+                        this.addToast('Dispositivo atualizado com sucesso!', 'success');
                         this.editDeviceModalOpen = false;
                     }
                 },
