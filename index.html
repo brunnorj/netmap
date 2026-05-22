@@ -64,6 +64,9 @@
                     <span>🔌</span> NETMAP PRO
                 </h1>
                 <p class="text-xs text-slate-400 mt-2">Controle de Infraestrutura, IPAM e Switches</p>
+                <div class="mt-2 text-[10px] text-slate-500 font-mono" x-show="isCloudSyncActive" x-cloak>
+                    🌐 Conectado à Nuvem (Sincronizando contas...)
+                </div>
             </div>
 
             <form @submit.prevent="login()" class="space-y-4">
@@ -1362,30 +1365,30 @@
                         <!-- Opções de Sincronização -->
                         <div class="lg:col-span-2 bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-6">
                             <h3 class="text-md font-bold text-white flex items-center gap-2">
-                                <span>🔄</span> Central de Backup
+                                <span>🔄</span> Central de Backup & Compartilhamento
                             </h3>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
                                     <div>
-                                        <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Exportar para Nuvem (Backup)</h4>
-                                        <p class="text-xs text-slate-400 mb-4">Atualiza as tabelas remotas com os dados do navegador atual.</p>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Sincronizar Dados</h4>
+                                        <p class="text-xs text-slate-400 mb-4">Exporta todo o seu mapeamento local para atualizar as tabelas na nuvem.</p>
                                     </div>
                                     <button @click="pushToSupabase()" :disabled="!isCloudSyncActive || currentUser.role === 'read'"
                                             :class="(!isCloudSyncActive || currentUser.role === 'read') ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-500' : 'bg-blue-600 hover:bg-blue-500 text-white font-semibold'"
                                             class="w-full py-2 rounded text-xs transition">
-                                        Enviar para Nuvem
+                                        Enviar para Nuvem (Backup)
                                     </button>
                                 </div>
 
                                 <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
                                     <div>
-                                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Importar da Nuvem (Restaurar)</h4>
-                                        <p class="text-xs text-slate-400 mb-4">Substitui o banco de dados do seu navegador local pelo banco na nuvem.</p>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Compartilhar com Equipe</h4>
+                                        <p class="text-xs text-slate-400 mb-4">Gere um link seguro de auto-configuração para os funcionários abrirem no PC deles.</p>
                                     </div>
-                                    <button @click="pullFromSupabase()" :disabled="!isCloudSyncActive"
+                                    <button @click="copyShareConfigLink()" :disabled="!isCloudSyncActive"
                                             :class="!isCloudSyncActive ? 'opacity-50 cursor-not-allowed bg-slate-800' : 'bg-emerald-600 hover:bg-emerald-500 text-white font-semibold'"
                                             class="w-full py-2 rounded text-xs transition">
-                                        Baixar da Nuvem
+                                        🔗 Copiar Link para Equipe
                                     </button>
                                 </div>
                             </div>
@@ -1851,6 +1854,13 @@
 
     <script>
         function netMapApp() {
+            // ==========================================
+            // CONFIGURAÇÕES PADRÃO (OPCIONAIS)
+            // Preencha aqui suas chaves se quiser embutir permanentemente no código:
+            const DEFAULT_SUPABASE_URL = ""; 
+            const DEFAULT_SUPABASE_KEY = "";
+            // ==========================================
+
             return {
                 // Estado da Sessão e Autenticação
                 isLoggedIn: false,
@@ -1901,7 +1911,7 @@
                 selectedSwitchId: null,
                 selectedPortNum: null,
 
-                // Módulos de Sincronização e Chaves Supabase (Salvas localmente no navegador)
+                // Módulos de Sincronização e Chaves Supabase
                 supabaseConfig: { url: '', key: '' },
                 supabaseClient: null,
                 isCloudSyncActive: false,
@@ -1914,10 +1924,39 @@
                 parsedImportItems: [],
                 uploadedFileName: '',
 
-                initSystem() {
+                async initSystem() {
                     this.restoreLocalDatabase();
                     this.checkActiveSession();
+                    this.checkSharedConfigLink();
                     this.restoreSupabaseConfig();
+
+                    // Se estiver conectado à nuvem, baixa os usuários em segundo plano imediatamente para liberar o login
+                    if (this.isCloudSyncActive) {
+                        await this.pullUsersOnLoad();
+                    }
+                },
+
+                // Verifica se o funcionário abriu a página usando um link de autoconfiguração gerado pelo admin
+                checkSharedConfigLink() {
+                    try {
+                        const hash = window.location.hash;
+                        if (hash && hash.startsWith('#config=')) {
+                            const configBase64 = hash.substring(8);
+                            const decrypted = atob(configBase64);
+                            const parsed = JSON.parse(decrypted);
+                            
+                            if (parsed.url && parsed.key) {
+                                this.supabaseConfig = parsed;
+                                localStorage.setItem('netmap_supabase_config', JSON.stringify(this.supabaseConfig));
+                                this.addToast('Configurações do Supabase importadas automaticamente!', 'success');
+                                
+                                // Limpa o hash da URL para manter a barra limpa
+                                window.history.replaceState(null, null, window.location.pathname);
+                            }
+                        }
+                    } catch (e) {
+                        console.error("Erro ao descriptografar link de equipe:", e);
+                    }
                 },
 
                 restoreLocalDatabase() {
@@ -1950,20 +1989,17 @@
                 },
 
                 loadDefaultDemoData() {
-                    // VLANs de demonstração com diferentes máscaras de subrede calculadas dinamicamente
                     this.vlans = [
-                        { id: 10, name: "Administração", subnet: "192.168.10.0/26", gateway: "192.168.10.1" }, // /26 (62 IPs utilizáveis, .1 a .62)
-                        { id: 20, name: "Produção", subnet: "192.168.20.0/27", gateway: "192.168.20.1" },       // /27 (30 IPs utilizáveis, .1 a .30)
-                        { id: 30, name: "CFTV", subnet: "192.168.30.0/28", gateway: "192.168.30.1" }            // /28 (14 IPs utilizáveis, .1 a .14)
+                        { id: 10, name: "Administração", subnet: "192.168.10.0/26", gateway: "192.168.10.1" },
+                        { id: 20, name: "Produção", subnet: "192.168.20.0/27", gateway: "192.168.20.1" },
+                        { id: 30, name: "CFTV", subnet: "192.168.30.0/28", gateway: "192.168.30.1" }
                     ];
 
-                    // Switches de demonstração
                     this.switches = [
                         { id: 1, name: "SW-01", model: "Cisco Catalyst 2960", totalPorts: 24, location: "Rack Sala CPD" },
                         { id: 2, name: "SW-02", model: "HP ProCurve 2530", totalPorts: 24, location: "Rack Bloco B" }
                     ];
 
-                    // Computadores/Dispositivos de demonstração dentro das faixas das subredes
                     this.devices = [
                         { id: 101, name: "PC-FINANCEIRO-01", ip: "192.168.10.11", vlanId: 10, switchName: "SW-01", port: 5, outlet: "T-101" },
                         { id: 102, name: "PC-DIRETORIA-01", ip: "192.168.10.12", vlanId: 10, switchName: "SW-01", port: 8, outlet: "T-102" },
@@ -1971,7 +2007,6 @@
                         { id: 104, name: "CAMERA-ENTRADA-01", ip: "192.168.30.5", vlanId: 30, switchName: "SW-01", port: 12, outlet: "C-01" }
                     ];
 
-                    // Tomadas Físicas de demonstração
                     this.outlets = [
                         { id: 201, name: "T-101", location: "Sala do Financeiro - Mesa 1", switchName: "SW-01", port: 5, status: "Ativo" },
                         { id: 202, name: "T-102", location: "Sala da Diretoria", switchName: "SW-01", port: 8, status: "Ativo" },
@@ -1979,13 +2014,11 @@
                         { id: 204, name: "C-01", location: "Entrada Principal", switchName: "SW-01", port: 12, status: "Ativo" }
                     ];
 
-                    // Usuários Padrão
                     this.users = [
                         { id: 1, username: "admin", password: "admin", role: "admin" },
                         { id: 2, username: "leitor", password: "123", role: "read" }
                     ];
 
-                    // Logs iniciais
                     this.logs = [
                         { id: 1, timestamp: this.getCurrentTime(), user: "Sistema", role: "admin", action: "SYSTEM", details: "Banco de dados inicializado com dados de demonstração." }
                     ];
@@ -1998,7 +2031,6 @@
                     this.saveLogs();
                 },
 
-                // Salvar dados no LocalStorage local
                 saveVlans() { localStorage.setItem('netmap_vlans', JSON.stringify(this.vlans)); },
                 saveSwitches() { localStorage.setItem('netmap_switches', JSON.stringify(this.switches)); },
                 saveDevices() { localStorage.setItem('netmap_devices', JSON.stringify(this.devices)); },
@@ -2015,7 +2047,7 @@
                 },
 
                 login() {
-                    const match = this.users.find(u => u.username.trim() === this.loginForm.username.trim() && u.password === this.loginForm.password);
+                    const match = this.users.find(u => u.username.trim().toLowerCase() === this.loginForm.username.trim().toLowerCase() && u.password === this.loginForm.password);
                     if (match) {
                         this.currentUser = { id: match.id, username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
@@ -2023,6 +2055,11 @@
                         this.addLog('LOGIN', `Usuário ${match.username} realizou autenticação com sucesso.`);
                         this.addToast('Bem-vindo ao NetMap PRO!', 'success');
                         this.loginForm = { username: '', password: '' };
+                        
+                        // Se estiver conectado ao Supabase, aproveita o login para carregar os dados atualizados
+                        if (this.isCloudSyncActive) {
+                            this.pullDataSilently();
+                        }
                     } else {
                         this.addToast('Usuário ou senha incorretos!', 'error');
                     }
@@ -2044,7 +2081,6 @@
                     this.addToast('Credenciais padrões de fábrica restauradas!', 'success');
                 },
 
-                // Toasts e Modais de Confirmação
                 addToast(message, type = 'success') {
                     const id = Date.now();
                     this.toasts.push({ id, message, type });
@@ -2070,7 +2106,6 @@
                     }
                 },
 
-                // Log de Eventos de Auditoria
                 addLog(action, details) {
                     const newLog = {
                         id: Date.now(),
@@ -2119,7 +2154,6 @@
                     return list;
                 },
 
-                // Helpers de VLAN
                 getVlanName(id) {
                     const match = this.vlans.find(v => v.id === parseInt(id));
                     return match ? match.name : 'N/A';
@@ -2137,30 +2171,23 @@
                     const vlan = this.vlans.find(v => v.id === parseInt(vlanId));
                     if (!vlan || !vlan.gateway) return [];
 
-                    // Converte Gateway para bytes de IP
                     const gwBytes = vlan.gateway.split('.').map(Number);
                     if (gwBytes.length !== 4 || gwBytes.some(isNaN)) return [];
 
-                    // Converte CIDR
                     const parts = vlan.subnet.split('/');
                     const cidr = parts[1] ? parseInt(parts[1].trim(), 10) : 24;
 
-                    // Usabilidade real da rede (Ex: /26 possui 62 IPs de host utilizáveis)
                     const capacity = Math.pow(2, 32 - cidr) - 2;
-
                     const ipList = [];
 
-                    // Endereço de Gateway como o primeiro elemento da grade
                     ipList.push({
                         fullIp: vlan.gateway,
                         label: 'GW',
                         isGateway: true
                     });
 
-                    // Valor base inteiro do Gateway
                     const gwNum = (gwBytes[0] * 16777216) + (gwBytes[1] * 65536) + (gwBytes[2] * 256) + gwBytes[3];
 
-                    // Gera os IPs sequenciais após o Gateway
                     for (let i = 1; i <= capacity; i++) {
                         const currentIpNum = gwNum + i;
 
@@ -2169,7 +2196,6 @@
                         const octet3 = Math.floor(currentIpNum / 256) % 256;
                         const octet4 = currentIpNum % 256;
 
-                        // Evitar endereços de broadcast .255 lógicos em redes comuns
                         if (cidr <= 24 && octet4 === 255) {
                             continue;
                         }
@@ -2186,25 +2212,21 @@
                     return ipList;
                 },
 
-                // Retorna apenas os IPs que estão de fato livres naquela VLAN para preencher a caixa seletiva
                 getAvailableVlanIps(vlanId, currentDeviceId = null) {
                     if (!vlanId) return [];
                     const allIps = this.getVlanIps(vlanId);
                     
                     return allIps.filter(ipObj => {
-                        // Impedir Gateway
                         if (ipObj.isGateway) return false;
 
-                        // Descobrir se o IP já está alocado para algum outro computador
                         const usedDevice = this.getDeviceByIp(ipObj.fullIp);
                         if (usedDevice) {
-                            // Se for o computador atual que estamos editando, deve continuar visível
                             if (currentDeviceId && usedDevice.id === currentDeviceId) {
                                 return true;
                             }
-                            return false; // Ocupado
+                            return false;
                         }
-                        return true; // Livre
+                        return true;
                     });
                 },
 
@@ -2217,7 +2239,6 @@
                     return this.devices.filter(d => d.ip && ipSet.has(d.ip.trim())).length;
                 },
 
-                // Lógica IPAM (Gerenciamento de IPs por correspondência estrita de string de IP completo)
                 isIpUsed(vlanId, fullIp) {
                     if (!vlanId || !fullIp) return false;
                     return this.devices.some(d => d.ip && d.ip.trim() === fullIp.trim());
@@ -2233,7 +2254,6 @@
                     return this.devices.find(d => d.ip && d.ip.trim() === ip.trim());
                 },
 
-                // Tomadas / Pontos Físicos
                 countUniqueOutlets() {
                     return this.outlets.length;
                 },
@@ -2242,7 +2262,6 @@
                     return this.devices.find(d => d.outlet && d.outlet.trim().toLowerCase() === outletName.trim().toLowerCase());
                 },
 
-                // Lógica de Switches
                 countConnectedPorts(switchName) {
                     return this.devices.filter(d => d.switchName === switchName).length;
                 },
@@ -2282,7 +2301,7 @@
                         const prevPort = dev.port;
                         dev.switchName = '';
                         dev.port = null;
-                        this.devices = [...this.devices]; // Força atualização reativa imediata do AlpineJS
+                        this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('UPDATE', `Desconectou ${dev.name} da porta ${prevPort} do switch ${swName}.`);
                         this.addToast('Dispositivo desconectado com sucesso!', 'success');
@@ -2290,7 +2309,6 @@
                     }
                 },
 
-                // Métodos de Abertura de Modais
                 openDeviceModal() {
                     if (this.currentUser.role === 'read') return;
                     this.deviceForm = { name: '', ip: '', vlanId: '', switchName: '', port: '', outlet: '' };
@@ -2346,7 +2364,7 @@
                         gateway: this.vlanForm.gateway.trim()
                     };
                     this.vlans.push(newVlan);
-                    this.vlans = [...this.vlans]; // Garantia de Reatividade
+                    this.vlans = [...this.vlans];
                     this.saveVlans();
                     this.addLog('CREATE', `Criou VLAN ${newVlan.id} - ${newVlan.name}`);
                     this.addToast('VLAN cadastrada!', 'success');
@@ -2368,7 +2386,7 @@
                         status: this.outletForm.status
                     };
                     this.outlets.push(newOutlet);
-                    this.outlets = [...this.outlets]; // Garantia de Reatividade
+                    this.outlets = [...this.outlets];
                     this.saveOutlets();
                     this.addLog('CREATE', `Cadastrou Tomada ${newOutlet.name}.`);
                     this.addToast('Tomada cadastrada!', 'success');
@@ -2384,7 +2402,7 @@
                         o.switchName = this.editOutletForm.switchName || '';
                         o.port = this.editOutletForm.port ? parseInt(this.editOutletForm.port) : null;
                         o.status = this.editOutletForm.status;
-                        this.outlets = [...this.outlets]; // Garantia de Reatividade
+                        this.outlets = [...this.outlets];
                         this.saveOutlets();
                         this.addLog('UPDATE', `Editou Tomada ${o.name}.`);
                         this.addToast('Tomada atualizada!', 'success');
@@ -2402,7 +2420,6 @@
                         sw.totalPorts = parseInt(this.editSwitchForm.totalPorts);
                         sw.location = this.editSwitchForm.location.trim();
                         
-                        // Atualização em cascata nas conexões de rede das máquinas caso o nome do Switch mude
                         if (oldName !== sw.name) {
                             this.devices.forEach(d => {
                                 if (d.switchName === oldName) d.switchName = sw.name;
@@ -2411,7 +2428,7 @@
                             this.saveDevices();
                         }
 
-                        this.switches = [...this.switches]; // Garantia de Reatividade
+                        this.switches = [...this.switches];
                         this.saveSwitches();
                         this.addLog('UPDATE', `Editou Switch ${sw.name}.`);
                         this.addToast('Switch atualizado!', 'success');
@@ -2431,7 +2448,7 @@
                         role: this.userForm.role
                     };
                     this.users.push(newUser);
-                    this.users = [...this.users]; // Garantia de Reatividade
+                    this.users = [...this.users];
                     this.saveUsers();
                     this.addLog('CREATE', `Criou usuário ${newUser.username}.`);
                     this.addToast('Usuário cadastrado com sucesso!', 'success');
@@ -2449,7 +2466,7 @@
                     const res = await this.openConfirm('Excluir Ativo', `Deseja realmente excluir o computador ${dev.name}?`);
                     if (res) {
                         this.devices = this.devices.filter(d => d.id !== dev.id);
-                        this.devices = [...this.devices]; // Força reatividade
+                        this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu o computador: ${dev.name}`);
                         this.addToast('Dispositivo removido.', 'success');
@@ -2465,7 +2482,7 @@
                             if (d.vlanId === vlan.id) d.vlanId = null;
                         });
                         this.saveVlans();
-                        this.devices = [...this.devices]; // Força Reatividade do IPAM e Tabela
+                        this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu VLAN ${vlan.id}.`);
                         this.addToast('VLAN excluída.', 'success');
@@ -2484,7 +2501,7 @@
                             }
                         });
                         this.saveSwitches();
-                        this.devices = [...this.devices]; // Força Reatividade
+                        this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('DELETE', `Removeu Switch ${sw.name}.`);
                         this.addToast('Switch removido.', 'success');
@@ -2659,7 +2676,7 @@
                     if (type === 'devices') {
                         const newDev = { id: Date.now() + Math.random(), ...item.data };
                         this.devices.push(newDev);
-                        this.devices = [...this.devices]; // Força reatividade no IPAM
+                        this.devices = [...this.devices];
                         this.saveDevices();
                     } else if (type === 'vlans') {
                         const newVlan = { id: item.data.id, name: item.data.name, subnet: item.data.subnet, gateway: item.data.gateway };
@@ -2695,7 +2712,6 @@
                         else if (type === 'outlets') this.outlets.push({ id: Date.now() + Math.random(), ...item.data });
                     });
                     
-                    // Substituição de referências de array para garantir reatividade total nas abas correspondentes
                     if (type === 'devices') {
                         this.devices = [...this.devices];
                         this.saveDevices();
@@ -2720,9 +2736,12 @@
                     const savedConfig = localStorage.getItem('netmap_supabase_config');
                     if (savedConfig) {
                         this.supabaseConfig = JSON.parse(savedConfig);
-                        if (this.supabaseConfig.url && this.supabaseConfig.key) {
-                            this.connectToSupabase();
-                        }
+                    } else if (DEFAULT_SUPABASE_URL && DEFAULT_SUPABASE_KEY) {
+                        this.supabaseConfig = { url: DEFAULT_SUPABASE_URL, key: DEFAULT_SUPABASE_KEY };
+                    }
+
+                    if (this.supabaseConfig.url && this.supabaseConfig.key) {
+                        this.connectToSupabase();
                     }
                 },
 
@@ -2733,16 +2752,22 @@
                     }
                     localStorage.setItem('netmap_supabase_config', JSON.stringify(this.supabaseConfig));
                     this.connectToSupabase();
+                    this.pullUsersOnLoad(); // Puxa as contas de primeira após conectar
                 },
 
                 connectToSupabase() {
+                    // Protege contra Adblockers ou falhas de carregamento da CDN do Supabase
+                    if (typeof supabase === 'undefined') {
+                        this.isCloudSyncActive = false;
+                        console.warn("Biblioteca Supabase JS não pôde ser carregada ou foi bloqueada.");
+                        return;
+                    }
                     try {
                         this.supabaseClient = supabase.createClient(this.supabaseConfig.url, this.supabaseConfig.key);
                         this.isCloudSyncActive = true;
-                        this.addToast('Conectado ao banco Supabase com sucesso!', 'success');
                     } catch (e) {
                         this.isCloudSyncActive = false;
-                        this.addToast('Falha na autenticação Supabase.', 'error');
+                        console.error("Erro ao instanciar cliente do Supabase:", e);
                     }
                 },
 
@@ -2754,12 +2779,76 @@
                     this.addToast('Desconectado do Supabase.', 'warning');
                 },
 
+                // Sincroniza a lista de usuários antes do login para que o funcionário consiga logar imediatamente
+                async pullUsersOnLoad() {
+                    if (!this.supabaseClient) return;
+                    try {
+                        const { data: users, error } = await this.supabaseClient.from('netmap_users').select('*');
+                        if (error) throw error;
+                        if (users && users.length > 0) {
+                            this.users = users;
+                            this.saveUsers();
+                        }
+                    } catch (e) {
+                        console.warn("Background Sync: Falha ao baixar lista de usuários na inicialização.", e);
+                    }
+                },
+
+                // Sincroniza o banco silenciosamente após o login para garantir consistência
+                async pullDataSilently() {
+                    if (!this.supabaseClient) return;
+                    try {
+                        const { data: vlans } = await this.supabaseClient.from('netmap_vlans').select('*');
+                        const { data: switches } = await this.supabaseClient.from('netmap_switches').select('*');
+                        const { data: outlets } = await this.supabaseClient.from('netmap_outlets').select('*');
+                        const { data: devices } = await this.supabaseClient.from('netmap_devices').select('*');
+                        const { data: logs } = await this.supabaseClient.from('netmap_logs').select('*');
+
+                        if (vlans) this.vlans = [...vlans];
+                        if (switches) this.switches = [...switches];
+                        if (outlets) this.outlets = [...outlets];
+                        if (devices) this.devices = [...devices];
+                        if (logs) this.logs = [...logs];
+
+                        this.saveVlans();
+                        this.saveSwitches();
+                        this.saveDevices();
+                        this.saveOutlets();
+                        this.saveLogs();
+                    } catch (err) {
+                        console.warn("Background Sync: Falha ao sincronizar dados offline.", err);
+                    }
+                },
+
+                // Copia um link com a criptografia base64 das credenciais do Supabase para enviar à equipe
+                copyShareConfigLink() {
+                    if (!this.isCloudSyncActive) return;
+                    try {
+                        const dataStr = JSON.stringify(this.supabaseConfig);
+                        const base64Data = btoa(dataStr);
+                        
+                        // Reconstrói a URL da aplicação com o hash correspondente
+                        const finalLink = window.location.origin + window.location.pathname + '#config=' + base64Data;
+                        
+                        // Força salvamento na área de transferência com compatibilidade a iframes do browser
+                        const tempInput = document.createElement('input');
+                        tempInput.value = finalLink;
+                        document.body.appendChild(tempInput);
+                        tempInput.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(tempInput);
+
+                        this.addToast('Link de autoconfiguração copiado! Envie-o para seus funcionários.', 'success');
+                    } catch (e) {
+                        this.addToast('Erro ao gerar link de compartilhamento.', 'error');
+                    }
+                },
+
                 async pushToSupabase() {
                     if (!this.isCloudSyncActive || this.currentUser.role === 'read') return;
                     this.addToast('Enviando dados locais para o Supabase...', 'warning');
 
                     try {
-                        // Envio tabela por tabela
                         await this.supabaseClient.from('netmap_vlans').delete().neq('id', 0);
                         await this.supabaseClient.from('netmap_vlans').insert(this.vlans);
 
@@ -2797,20 +2886,12 @@
                         const { data: users } = await this.supabaseClient.from('netmap_users').select('*');
                         const { data: logs } = await this.supabaseClient.from('netmap_logs').select('*');
 
-                        if (vlans) this.vlans = vlans;
-                        if (switches) this.switches = switches;
-                        if (outlets) this.outlets = outlets;
-                        if (devices) this.devices = devices;
-                        if (users) this.users = users;
-                        if (logs) this.logs = logs;
-
-                        // Forçar reatividade geral substituindo as matrizes na memória do AlpineJS
-                        this.vlans = [...this.vlans];
-                        this.switches = [...this.switches];
-                        this.devices = [...this.devices];
-                        this.outlets = [...this.outlets];
-                        this.users = [...this.users];
-                        this.logs = [...this.logs];
+                        if (vlans) this.vlans = [...vlans];
+                        if (switches) this.switches = [...switches];
+                        if (outlets) this.outlets = [...outlets];
+                        if (devices) this.devices = [...devices];
+                        if (users) this.users = [...users];
+                        if (logs) this.logs = [...logs];
 
                         this.saveVlans();
                         this.saveSwitches();
@@ -2826,7 +2907,6 @@
                     }
                 },
 
-                // Helpers Diversos (Tempo, Estilo dos badges de log)
                 getCurrentTime() {
                     const now = new Date();
                     return now.toLocaleString('pt-BR');
@@ -2890,7 +2970,7 @@
                     };
 
                     this.devices.push(newDevice);
-                    this.devices = [...this.devices]; // Força reatividade instantânea no AlpineJS e no IPAM
+                    this.devices = [...this.devices];
                     this.saveDevices();
                     this.addLog('CREATE', `Cadastrou o computador: ${newDevice.name}`);
                     this.addToast('Dispositivo cadastrado com sucesso!', 'success');
@@ -2936,10 +3016,10 @@
                         device.port = this.editDeviceForm.port ? parseInt(this.editDeviceForm.port) : null;
                         device.outlet = this.editDeviceForm.outlet.trim() || '';
 
-                        this.devices = [...this.devices]; // Força reatividade instantânea no AlpineJS e no IPAM
+                        this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('UPDATE', `Editou o computador: ${device.name}`);
-                        this.addToast('Dispositivo atualizado com sucesso!', 'success');
+                        this.addToast('Dispositivo cadastrado com sucesso!', 'success');
                         this.editDeviceModalOpen = false;
                     }
                 },
@@ -2966,7 +3046,7 @@
                     };
 
                     this.switches.push(newSwitch);
-                    this.switches = [...this.switches]; // Garantia de Reatividade
+                    this.switches = [...this.switches];
                     this.saveSwitches();
                     this.addLog('CREATE', `Adicionou o switch: ${newSwitch.name}`);
                     this.addToast('Switch adicionado!', 'success');
