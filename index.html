@@ -58,14 +58,61 @@
 
     <!-- Tela de Autenticação -->
     <div x-show="!isLoggedIn" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950 p-4" x-cloak>
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-6">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-5">
             <div class="text-center">
                 <h1 class="text-2xl font-extrabold tracking-wider bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center justify-center gap-2">
                     <span>🔌</span> NETMAP PRO
                 </h1>
                 <p class="text-xs text-slate-400 mt-2">Controle de Infraestrutura, IPAM e Switches</p>
-                <div class="mt-2 text-[10px] text-slate-500 font-mono" x-show="isCloudSyncActive" x-cloak>
-                    🌐 Conectado à Nuvem (Sincronizando contas...)
+            </div>
+
+            <!-- Painel de Sincronização / Diagnóstico Pré-Login -->
+            <div class="bg-slate-950/80 p-3.5 rounded-lg border border-slate-800 space-y-2 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-400 font-medium">Integração na Nuvem:</span>
+                    <span :class="isCloudSyncActive ? 'text-emerald-400 font-bold' : 'text-slate-500 font-medium'" 
+                          x-text="isCloudSyncActive ? '✓ Ativa' : 'Pendente (Local)'"></span>
+                </div>
+                
+                <!-- Detalhes do carregamento do Supabase -->
+                <template x-if="isCloudSyncActive">
+                    <div class="space-y-2 pt-1 border-t border-slate-900">
+                        <div class="flex justify-between items-center">
+                            <span class="text-[11px] text-slate-400" 
+                                  x-text="isConnectingCloud ? '🔄 A sincronizar...' : (cloudUserCount > 0 ? '✓ ' + cloudUserCount + ' contas carregadas da nuvem' : 'Contas pendentes de carga')"></span>
+                            <button type="button" @click="pullUsersOnLoad()" :disabled="isConnectingCloud" 
+                                    class="text-blue-400 hover:text-blue-300 font-bold hover:underline transition">
+                                Sincronizar
+                            </button>
+                        </div>
+                        <!-- Mensagem de Erro do Supabase, se houver -->
+                        <div x-show="supabaseLoadError" class="text-red-400 text-[10px] bg-red-950/30 border border-red-900/40 p-2 rounded break-all" x-text="supabaseLoadError"></div>
+                    </div>
+                </template>
+
+                <!-- Configuração manual diretamente da tela de login -->
+                <div class="text-center pt-2">
+                    <button type="button" @click="loginConfigOpen = !loginConfigOpen" class="text-[11px] text-slate-500 hover:text-slate-300 flex items-center justify-center gap-1 w-full font-medium transition">
+                        <span x-text="loginConfigOpen ? '🙈 Ocultar Configurações Manuais' : '⚙️ Configurar Conexão Manualmente'"></span>
+                    </button>
+                </div>
+
+                <!-- Formulário Manual Oculto -->
+                <div x-show="loginConfigOpen" class="space-y-3 pt-3 border-t border-slate-900" x-cloak>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Supabase URL</label>
+                        <input type="text" x-model="supabaseConfig.url" placeholder="https://xxxxxx.supabase.co" 
+                               class="w-full bg-slate-900 text-slate-200 p-2 rounded border border-slate-700 text-xs focus:outline-none focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-[10px] font-bold text-slate-400 mb-1 uppercase">Anon Key</label>
+                        <input type="password" x-model="supabaseConfig.key" placeholder="Chave pública Anon" 
+                               class="w-full bg-slate-900 text-slate-200 p-2 rounded border border-slate-700 text-xs focus:outline-none focus:border-blue-500">
+                    </div>
+                    <button type="button" @click="saveSupabaseConfig(); loginConfigOpen = false" 
+                            class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-1.5 rounded text-[11px] transition">
+                        Salvar e Conectar Nuvem
+                    </button>
                 </div>
             </div>
 
@@ -1915,6 +1962,10 @@
                 supabaseConfig: { url: '', key: '' },
                 supabaseClient: null,
                 isCloudSyncActive: false,
+                isConnectingCloud: false,
+                supabaseLoadError: '',
+                cloudUserCount: 0,
+                loginConfigOpen: false,
 
                 // Módulos de Importação CSV
                 localImportPanel: null,
@@ -2020,7 +2071,7 @@
                     ];
 
                     this.logs = [
-                        { id: 1, timestamp: this.getCurrentTime(), user: "Sistema", role: "admin", action: "SYSTEM", details: "Banco de dados inicializado com dados de demonstração." }
+                        { id: 1, timestamp: this.getCurrentTime(), user: "Sistema", role: "admin", action: "SYSTEM", details: "Banco de dados initialized com dados de demonstração." }
                     ];
 
                     this.saveVlans();
@@ -2752,13 +2803,13 @@
                     }
                     localStorage.setItem('netmap_supabase_config', JSON.stringify(this.supabaseConfig));
                     this.connectToSupabase();
-                    this.pullUsersOnLoad(); // Puxa as contas de primeira após conectar
+                    this.pullUsersOnLoad(); // Puxa as contas após salvar as chaves
                 },
 
                 connectToSupabase() {
-                    // Protege contra Adblockers ou falhas de carregamento da CDN do Supabase
                     if (typeof supabase === 'undefined') {
                         this.isCloudSyncActive = false;
+                        this.supabaseLoadError = "Biblioteca Supabase JS não carregou ou foi bloqueada.";
                         console.warn("Biblioteca Supabase JS não pôde ser carregada ou foi bloqueada.");
                         return;
                     }
@@ -2767,6 +2818,7 @@
                         this.isCloudSyncActive = true;
                     } catch (e) {
                         this.isCloudSyncActive = false;
+                        this.supabaseLoadError = "Erro na inicialização do cliente Supabase.";
                         console.error("Erro ao instanciar cliente do Supabase:", e);
                     }
                 },
@@ -2776,21 +2828,34 @@
                     this.supabaseConfig = { url: '', key: '' };
                     this.supabaseClient = null;
                     this.isCloudSyncActive = false;
+                    this.cloudUserCount = 0;
                     this.addToast('Desconectado do Supabase.', 'warning');
                 },
 
                 // Sincroniza a lista de usuários antes do login para que o funcionário consiga logar imediatamente
                 async pullUsersOnLoad() {
-                    if (!this.supabaseClient) return;
+                    if (!this.supabaseClient) {
+                        this.supabaseLoadError = "Conexão remota não inicializada.";
+                        return;
+                    }
+                    this.isConnectingCloud = true;
+                    this.supabaseLoadError = "";
                     try {
                         const { data: users, error } = await this.supabaseClient.from('netmap_users').select('*');
                         if (error) throw error;
                         if (users && users.length > 0) {
                             this.users = users;
                             this.saveUsers();
+                            this.cloudUserCount = users.length;
+                            this.addToast(`${users.length} contas de usuário sincronizadas!`, 'success');
+                        } else {
+                            this.supabaseLoadError = "Tabela de usuários remota vazia ou inacessível.";
                         }
                     } catch (e) {
-                        console.warn("Background Sync: Falha ao baixar lista de usuários na inicialização.", e);
+                        console.warn("Background Sync: Falha ao baixar lista de usuários.", e);
+                        this.supabaseLoadError = e.message || "Erro de conexão remota. Verifique a internet e o banco.";
+                    } finally {
+                        this.isConnectingCloud = false;
                     }
                 },
 
