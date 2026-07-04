@@ -1086,7 +1086,7 @@
                                         <p class="text-xs text-slate-400 mb-4">Força a atualização do aplicativo local com a versão gravada no Google Sheets, substituindo os dados do navegador.</p>
                                     </div>
                                     <button @click="loadFromGoogleSheets(true)" :disabled="!gsConfig.webAppUrl"
-                                            class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-sans font-medium">
+                                            class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-sans font-medium font-sans">
                                         Baixar do Google Sheets
                                     </button>
                                 </div>
@@ -1503,7 +1503,7 @@
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Identificação da Tomada</label>
                     <input type="text" x-model="editOutletForm.name" required placeholder="Ex: T-102" 
-                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-sans">
                 </div>
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
@@ -2480,6 +2480,7 @@
                     } catch (err) {
                         console.error(err);
                         this.gsSync.status = 'offline';
+                        localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
                         this.addToast('Não foi possível conectar ao Google Sheets. Verifique o link ou o CORS.', 'error');
                     }
                 },
@@ -2487,7 +2488,7 @@
                 // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS
                 async saveToGoogleSheets() {
                     if (!this.gsConfig.webAppUrl) return;
-                    this.addToast('Enviando dados para o Google Sheets...', 'warning');
+                    this.addToast('Sincronizando com a nuvem...', 'warning');
 
                     // Garante que o carimbo de modificação local esteja atualizado no payload
                     this.touchLocalDatabase();
@@ -2503,31 +2504,36 @@
                     };
 
                     try {
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s limite para evitar travamento
+
                         const response = await fetch(this.gsConfig.webAppUrl, {
                             method: 'POST',
                             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                            body: JSON.stringify(dbData)
+                            body: JSON.stringify(dbData),
+                            signal: controller.signal
                         });
+                        clearTimeout(timeoutId);
+
                         const resText = await response.text();
                         let resJson = {};
                         try { resJson = JSON.parse(resText); } catch(e){}
 
-                        if (response.ok || resJson.status === 'success') {
+                        if (response.ok || resJson.status === 'success' || resJson.result === 'success') {
                             this.gsSync.lastSynced = this.getCurrentTime();
                             this.gsSync.status = 'online';
                             localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-                            this.addToast('Sincronização concluída com sucesso!', 'success');
+                            this.addToast('Sincronização em nuvem realizada com sucesso!', 'success');
                             this.addLog('SYNC', 'Sincronizou banco local com o Google Sheets Web App.');
                         } else {
-                            throw new Error('Falha no upload.');
+                            throw new Error(resJson.message || 'Falha no upload do payload do banco.');
                         }
                     } catch (err) {
-                        console.error(err);
-                        // Tratamento de sucesso falso para fins de segurança local
-                        this.addToast('Dados locais salvos! Sincronização concluída.', 'success');
-                        this.gsSync.lastSynced = this.getCurrentTime();
-                        this.gsSync.status = 'online';
+                        console.error('Erro de gravação no Sheets:', err);
+                        this.gsSync.status = 'offline';
                         localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                        this.addToast('⚠️ Alerta: Dados salvos LOCALMENTE, mas falhou ao enviar para o Google Sheets (Nuvem). Verifique a URL ou configurações do Apps Script!', 'error');
+                        this.addLog('SYNC_ERROR', `Falha ao sincronizar com Google Sheets: ${err.message}`);
                     }
                 },
 
@@ -2553,6 +2559,7 @@
                             } else {
                                 console.log("Dados locais são mais recentes do que a versão na planilha. Autorestauração ignorada.");
                                 this.gsSync.status = 'online';
+                                localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
                             }
                         }
                     } catch(e) {
@@ -2581,7 +2588,7 @@
 
                 // Salva automaticamente se estiver online
                 async autoSaveDriveCloud() {
-                    if (this.gsSync.status === 'online' && this.currentUser.role !== 'read') {
+                    if (this.gsConfig.webAppUrl && this.currentUser.role !== 'read') {
                         await this.saveToGoogleSheets();
                     }
                 },
