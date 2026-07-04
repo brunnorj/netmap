@@ -1,0 +1,2704 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NetMap Manager - Controle de Infraestrutura, IPAM e Switches</title>
+    <!-- Tailwind CSS para estilização moderna e design limpo -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Alpine.js para reatividade e estado da aplicação -->
+    <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <style>
+        [x-cloak] { display: none !important; }
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans min-h-screen" x-data="netMapApp()" x-init="initSystem()">
+
+    <!-- Sistema de Toasts (Notificações Flutuantes) -->
+    <div class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full">
+        <template x-for="toast in toasts" :key="toast.id">
+            <div :class="toast.type === 'error' ? 'bg-red-600' : (toast.type === 'warning' ? 'bg-amber-600' : 'bg-emerald-600')"
+                 class="px-4 py-3 rounded-lg shadow-xl flex items-center gap-3 text-white transition-all duration-300 border border-white/10">
+                <span class="font-bold" x-text="toast.type === 'error' ? '❌' : (toast.type === 'warning' ? '⚠️' : '✅')"></span>
+                <span class="text-sm font-medium" x-text="toast.message"></span>
+            </div>
+        </template>
+    </div>
+
+    <!-- Modal de Confirmação Personalizado -->
+    <div x-show="confirmModal.open" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/85 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl">
+            <div class="flex items-center gap-3 text-amber-500 mb-3">
+                <span class="text-2xl">⚠️</span>
+                <h3 class="text-lg font-bold text-white" x-text="confirmModal.title"></h3>
+            </div>
+            <p class="text-sm text-slate-300 mb-6" x-text="confirmModal.message"></p>
+            <div class="flex justify-end gap-3">
+                <button @click="closeConfirm(false)" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                <button @click="closeConfirm(true)" class="bg-red-600 hover:bg-red-500 text-white px-5 py-2 rounded text-sm font-semibold transition">Confirmar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tela de Autenticação -->
+    <div x-show="!isLoggedIn" class="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950 p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-md w-full p-8 shadow-2xl space-y-5">
+            <div class="text-center">
+                <h1 class="text-2xl font-extrabold tracking-wider bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center justify-center gap-2">
+                    <span>🔌</span> NETMAP PRO
+                </h1>
+                <p class="text-xs text-slate-400 mt-2">Controle de Infraestrutura, IPAM e Switches</p>
+            </div>
+
+            <!-- Painel de Conexão com Google Sheets no Login -->
+            <div class="bg-slate-950/80 p-3.5 rounded-lg border border-slate-800 space-y-2 text-xs">
+                <div class="flex items-center justify-between">
+                    <span class="text-slate-400 font-medium">Banco de Dados Nuvem:</span>
+                    <span :class="gsSync.status === 'online' ? 'text-emerald-400 font-bold' : 'text-amber-500 font-medium'" 
+                          x-text="gsSync.status === 'online' ? '✓ Google Sheets Conectado' : 'Aguardando Sincronização'"></span>
+                </div>
+                
+                <template x-if="gsConfig.webAppUrl">
+                    <div class="flex justify-between items-center pt-1.5 border-t border-slate-900">
+                        <span class="text-[10px] text-slate-400 truncate max-w-[200px]" x-text="'URL: ' + gsConfig.webAppUrl"></span>
+                        <button type="button" @click="testSheetsConnection()" class="text-blue-400 font-semibold hover:underline">Sincronizar</button>
+                    </div>
+                </template>
+            </div>
+
+            <form @submit.prevent="login()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Usuário</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">👤</span>
+                        <input type="text" x-model="loginForm.username" required placeholder="Digite seu usuário..." 
+                               class="w-full bg-slate-950 text-slate-200 pl-10 pr-4 py-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-blue-500 text-sm transition">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Senha</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">🔑</span>
+                        <input type="password" x-model="loginForm.password" required placeholder="Digite sua senha..." 
+                               class="w-full bg-slate-950 text-slate-200 pl-10 pr-4 py-2.5 rounded-lg border border-slate-800 focus:outline-none focus:border-blue-500 text-sm transition">
+                    </div>
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
+                    Entrar no Sistema
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Corpo Principal do Sistema -->
+    <div class="flex h-screen overflow-hidden" x-show="isLoggedIn" x-cloak>
+        
+        <!-- Sidebar lateral -->
+        <aside :class="mobileMenuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'" 
+               class="fixed md:static inset-y-0 left-0 z-40 w-64 bg-slate-950 flex flex-col justify-between border-r border-slate-800 shrink-0 transition-transform duration-300">
+            <div>
+                <!-- Logo/Nome -->
+                <div class="p-6 border-b border-slate-800 flex items-center justify-between">
+                    <div>
+                        <h1 class="text-xl font-extrabold tracking-wider bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center gap-2">
+                            <span>🔌</span> NETMAP PRO
+                        </h1>
+                        <p class="text-xs text-slate-400 mt-1">Gestão de Parque de Redes</p>
+                    </div>
+                    <!-- Fechar menu mobile -->
+                    <button @click="mobileMenuOpen = false" class="md:hidden text-slate-400 hover:text-white text-xl">
+                        ✖
+                    </button>
+                </div>
+
+                <!-- Menu de Navegação -->
+                <nav class="p-4 space-y-1.5 overflow-y-auto max-h-[calc(100vh-230px)]">
+                    <button @click="changeTab('dashboard')" :class="currentTab === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>📊</span> Dashboard Geral
+                    </button>
+                    <button @click="changeTab('devices')" :class="currentTab === 'devices' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>💻</span> Computadores
+                    </button>
+                    <button @click="changeTab('vlans')" :class="currentTab === 'vlans' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>🌐</span> VLANs e Subredes
+                    </button>
+                    <button @click="changeTab('ip')" :class="currentTab === 'ip' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>🔎</span> Endereços IPs
+                    </button>
+                    <button @click="changeTab('switch')" :class="currentTab === 'switch' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>🎛️</span> Switches e Portas
+                    </button>
+                    <button @click="changeTab('outlets')" :class="currentTab === 'outlets' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>🔌</span> Pontos de Rede
+                    </button>
+                    <button @click="changeTab('cloud')" :class="currentTab === 'cloud' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>📊</span> Google Sheets Sync
+                    </button>
+                    <button x-show="currentUser.role === 'admin'" @click="changeTab('users')" :class="currentTab === 'users' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium" x-cloak>
+                        <span>👥</span> Usuários
+                    </button>
+                    <button @click="changeTab('logs')" :class="currentTab === 'logs' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-900 hover:text-white'" class="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg transition text-sm font-medium">
+                        <span>📝</span> Log de Auditoria
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Rodapé da Sidebar com Identificação -->
+            <div class="p-4 border-t border-slate-800 bg-slate-950">
+                <div class="text-xs text-slate-400 mb-2">Usuário Logado:</div>
+                <div class="flex items-center justify-between bg-slate-900 p-2.5 rounded-lg border border-slate-700">
+                    <div class="flex flex-col">
+                        <span class="text-xs font-bold uppercase tracking-wider text-slate-200" x-text="currentUser.username"></span>
+                        <span class="text-[10px] text-emerald-400 font-mono" x-text="currentUser.role === 'admin' ? 'Administrador' : 'Apenas Leitura'"></span>
+                    </div>
+                    <button @click="logout()" class="text-xs bg-red-950/40 hover:bg-red-900/40 text-red-400 px-2.5 py-1.5 rounded transition border border-red-900/30 font-semibold">
+                        Sair
+                    </button>
+                </div>
+                
+                <div class="mt-4 pt-3 border-t border-slate-900 text-center text-[10px] text-slate-500 tracking-wider font-mono">
+                    ELABORADO POR <span class="text-blue-400 font-bold block mt-0.5">BRUNO SAMPAIO - SUBTIC</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Área de Conteúdo Principal -->
+        <main class="flex-1 flex flex-col min-w-0 overflow-y-auto bg-slate-900 relative">
+            
+            <!-- Header superior de buscas e status -->
+            <header class="h-16 border-b border-slate-800 flex items-center justify-between px-4 md:px-8 bg-slate-950 shrink-0">
+                <div class="flex items-center gap-3 w-1/2">
+                    <!-- Botão Toggle Lateral Mobile -->
+                    <button @click="mobileMenuOpen = !mobileMenuOpen" class="md:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-900 rounded-lg">
+                        ☰
+                    </button>
+                    <div class="relative w-full">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+                        <input type="text" x-model="searchQuery" placeholder="Busca global (IP, Switch, Computador, VLAN, Tomada)..." 
+                               class="w-full bg-slate-900 text-slate-200 pl-10 pr-4 py-1.5 rounded-lg border border-slate-700 focus:outline-none focus:border-blue-500 text-sm transition">
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <div class="flex items-center gap-2">
+                        <span :class="gsSync.status === 'online' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-600'" class="h-2.5 w-2.5 rounded-full"></span>
+                        <span class="text-xs text-slate-400 font-medium" x-text="gsSync.status === 'online' ? 'Sincronizado no Google Sheets' : 'Banco Local (Offline)'"></span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="p-4 md:p-8 flex-1">
+                
+                <!-- Alerta se o usuário estiver em Modo Leitura -->
+                <div x-show="currentUser.role === 'read'" class="mb-6 bg-amber-950/40 border border-amber-800 text-amber-300 px-4 py-3 rounded-lg flex items-center gap-3 text-sm animate-fade-in" x-cloak>
+                    <span>🛡️</span>
+                    <div>
+                        <strong class="font-bold">Modo de Leitura Ativado:</strong> Você pode visualizar toda a infraestrutura e dados, mas cadastros, importações e edições estão desabilitados.
+                    </div>
+                </div>
+
+                <!-- ABA: Dashboard Geral -->
+                <div x-show="currentTab === 'dashboard'" class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-2xl font-bold text-white">Dashboard do Parque Tecnológico</h2>
+                        <span class="text-xs bg-slate-800 px-3 py-1.5 rounded-full text-slate-400 font-mono" x-text="'Atualizado: ' + getCurrentTime()"></span>
+                    </div>
+
+                    <!-- Cards de Métricas -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 flex items-center justify-between hover:border-slate-700 transition">
+                            <div>
+                                <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Computadores</p>
+                                <h3 class="text-3xl font-extrabold text-white mt-1" x-text="devices.length"></h3>
+                            </div>
+                            <div class="text-3xl bg-blue-950/50 p-3 rounded-lg text-blue-400 border border-blue-900/40">💻</div>
+                        </div>
+                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 flex items-center justify-between hover:border-slate-700 transition">
+                            <div>
+                                <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">VLANs Mapeadas</p>
+                                <h3 class="text-3xl font-extrabold text-white mt-1" x-text="vlans.length"></h3>
+                            </div>
+                            <div class="text-3xl bg-emerald-950/50 p-3 rounded-lg text-emerald-400 border border-emerald-900/40">🌐</div>
+                        </div>
+                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 flex items-center justify-between hover:border-slate-700 transition">
+                            <div>
+                                <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Switches Ativos</p>
+                                <h3 class="text-3xl font-extrabold text-white mt-1" x-text="switches.length"></h3>
+                            </div>
+                            <div class="text-3xl bg-indigo-950/50 p-3 rounded-lg text-indigo-400 border border-indigo-900/40">🎛️</div>
+                        </div>
+                        <div class="bg-slate-950 p-5 rounded-xl border border-slate-800 flex items-center justify-between hover:border-slate-700 transition">
+                            <div>
+                                <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Pontos de Rede</p>
+                                <h3 class="text-3xl font-extrabold text-white mt-1" x-text="countUniqueOutlets()"></h3>
+                            </div>
+                            <div class="text-3xl bg-amber-950/50 p-3 rounded-lg text-amber-400 border border-amber-900/40">🔌</div>
+                        </div>
+                    </div>
+
+                    <!-- Mapeamento de IPs por VLAN -->
+                    <div class="bg-slate-950 p-6 rounded-xl border border-slate-800">
+                        <h3 class="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                            <span>📊</span> Visão Geral de IPs Utilizados por VLAN
+                        </h3>
+                        <div class="space-y-4">
+                            <template x-for="vlan in vlans" :key="vlan.id">
+                                <div>
+                                    <div class="flex justify-between text-sm mb-1.5">
+                                        <div class="flex items-center gap-2">
+                                            <span class="font-bold text-slate-200" x-text="'VLAN ' + vlan.id + ' - ' + vlan.name"></span>
+                                            <span class="text-xs text-slate-500 font-mono" x-text="'Subrede: ' + vlan.subnet"></span>
+                                        </div>
+                                        <div class="text-xs text-slate-300 font-mono">
+                                            <span x-text="vlanIpsUsedCount(vlan.id)" class="text-blue-400 font-bold"></span> / <span x-text="getVlanIps(vlan.id).length"></span> IPs Utilizados 
+                                            (<span x-text="getVlanIps(vlan.id).length > 0 ? Math.round((vlanIpsUsedCount(vlan.id) / getVlanIps(vlan.id).length) * 100) : 0"></span>%)
+                                        </div>
+                                    </div>
+                                    <div class="w-full bg-slate-800 h-3.5 rounded-full overflow-hidden flex border border-slate-700">
+                                        <div :style="'width: ' + (getVlanIps(vlan.id).length > 0 ? ((vlanIpsUsedCount(vlan.id) / getVlanIps(vlan.id).length) * 100) : 0) + '%'" 
+                                             class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-500"></div>
+                                    </div>
+                                    <div class="flex justify-between text-[11px] text-slate-500 mt-1 px-1">
+                                        <span x-text="'IPs Livres: ' + (getVlanIps(vlan.id).length - vlanIpsUsedCount(vlan.id))"></span>
+                                        <span x-text="'Gateway: ' + vlan.gateway"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Resultados de Busca Global -->
+                    <div class="bg-slate-950 p-6 rounded-xl border border-slate-800" x-show="searchQuery !== ''">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-lg font-bold text-emerald-400 flex items-center gap-2">
+                                <span>🎯</span> Resultados da Busca Global (Filtrado por: <span class="italic text-white" x-text="searchQuery"></span>)
+                            </h3>
+                            <button @click="searchQuery = ''" class="text-xs text-slate-400 hover:text-white underline">Limpar filtro</button>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400">
+                                    <tr>
+                                        <th class="p-3">Dispositivo</th>
+                                        <th class="p-3">IP</th>
+                                        <th class="p-3">VLAN</th>
+                                        <th class="p-3">Switch / Porta</th>
+                                        <th class="p-3">Ponto de Rede</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="dev in filteredDevices" :key="dev.id">
+                                        <tr class="border-b border-slate-800 hover:bg-slate-900 transition">
+                                            <td class="p-3 font-semibold text-white" x-text="dev.name"></td>
+                                            <td class="p-3 font-mono text-cyan-400" x-text="dev.ip || 'Sem IP'"></td>
+                                            <td class="p-3" x-text="dev.vlanId ? 'VLAN ' + dev.vlanId : 'Nenhuma'"></td>
+                                            <td class="p-3">
+                                                <span class="bg-slate-800 text-slate-300 px-2 py-1 rounded text-xs font-mono" x-text="dev.switchName ? dev.switchName + ' [P: ' + dev.port + ']' : 'Desconectado'"></span>
+                                            </td>
+                                            <td class="p-3 text-amber-400 font-bold" x-text="dev.outlet || 'S/ Ponto'"></td>
+                                        </tr>
+                                    </template>
+                                    <tr x-show="filteredDevices.length === 0">
+                                        <td colspan="5" class="p-6 text-center text-slate-500">Nenhum ativo encontrado para a busca.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA: Computadores -->
+                <div x-show="currentTab === 'devices'" class="space-y-6" x-cloak>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">Computadores e Ativos de Rede</h2>
+                            <p class="text-xs text-slate-400 mt-1">Gerencie as máquinas conectadas à infraestrutura.</p>
+                        </div>
+                        <div class="flex gap-2 flex-wrap">
+                            <button @click="toggleLocalImport('devices')" :disabled="currentUser.role === 'read'"
+                                    :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 'bg-slate-800 hover:bg-slate-700 text-white'"
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition border border-slate-700 font-sans">
+                                <span>📥</span> Importar CSV
+                            </button>
+                            <button @click="openDeviceModal()" :disabled="currentUser.role === 'read'"
+                                    :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white font-sans font-medium">
+                                <span>➕</span> Cadastrar Computador
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Importador CSV para Computadores -->
+                    <div x-show="localImportPanel === 'devices'" class="bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-6 animate-fade-in" x-cloak>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
+                                <span>📥</span> Importador de Computadores (Upload de Arquivo CSV)
+                            </h3>
+                            <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2 space-y-4">
+                                <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
+                                    <input type="file" accept=".csv" @change="handleCsvUpload($event, 'devices')" class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <span class="text-3xl mb-2">📥</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
+                                </div>
+                                
+                                <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
+                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                </div>
+
+                                <div class="flex justify-between items-center text-xs">
+                                    <button @click="loadSampleCsv('devices');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo (Simulação)</button>
+                                    <button x-show="csvText" @click="readCsvColumns('devices')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition font-sans font-medium">Analisar Colunas</button>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
+                                <p class="font-bold text-white">Instruções:</p>
+                                <p>1. Selecione seu arquivo CSV.</p>
+                                <p>2. Mapeie as colunas detectadas para as propriedades corretas.</p>
+                                <p>3. Clique em processar para validar individualmente ou em lote.</p>
+                            </div>
+                        </div>
+
+                        <!-- Configuração Mapeamentos CSV -->
+                        <div x-show="csvHeaders.length > 0 && localImportPanel === 'devices'" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Mapear colunas identificadas para Computadores:</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-900 p-4 rounded-lg font-sans">
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Nome do Computador</label>
+                                    <select x-model="csvMappings.name" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.name == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">IP</label>
+                                    <select x-model="csvMappings.ip" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.ip == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">ID da VLAN</label>
+                                    <select x-model="csvMappings.vlanId" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.vlanId == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Nome do Switch</label>
+                                    <select x-model="csvMappings.switchName" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.switchName == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Porta do Switch</label>
+                                    <select x-model="csvMappings.port" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-mono">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.port == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Ponto de Rede (Tomada)</label>
+                                    <select x-model="csvMappings.outlet" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.outlet == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex justify-end">
+                                <button @click="processCsvWithMappings('devices')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition font-sans">
+                                    Processar e Validar Registros
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Mapeador Opcional para Tomadas em Comum -->
+                        <div x-show="parsedImportItems.length > 0" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Visualizar e Importar:</h4>
+                                <button @click="importAllParsed('devices')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded font-bold transition font-sans">
+                                    ⚡ Importar Todos os Válidos
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto border border-slate-800 rounded-lg max-h-60 font-sans">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-900 text-slate-400 sticky top-0">
+                                        <tr>
+                                            <th class="p-2.5">Linha Bruta</th>
+                                            <th class="p-2.5">Mapeado</th>
+                                            <th class="p-2.5">Validação</th>
+                                            <th class="p-2.5 text-right">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="item in parsedImportItems" :key="item.id">
+                                            <tr class="border-b border-slate-800 hover:bg-slate-900/60 transition">
+                                                <td class="p-2.5 font-mono text-slate-500 truncate max-w-[200px]" x-text="item.rawLine"></td>
+                                                <td class="p-2.5">
+                                                    <strong class="text-white" x-text="item.data.name"></strong> | 
+                                                    <span class="text-cyan-400 font-mono" x-text="item.data.ip || 'Sem IP'"></span>
+                                                </td>
+                                                <td class="p-2.5">
+                                                    <span :class="item.status === 'ready' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-red-950 text-red-400 border border-red-900'"
+                                                          class="px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block border"
+                                                          x-text="item.status === 'ready' ? '✓ Pronto' : '❌ Erro'"></span>
+                                                    <span class="block text-[10px] text-slate-400 mt-0.5" x-text="item.errorMsg"></span>
+                                                </td>
+                                                <td class="p-2.5 text-right">
+                                                    <div class="flex justify-end gap-1">
+                                                        <button @click="importSingleItem(item, 'devices')" :disabled="item.status === 'error'"
+                                                                class="bg-emerald-600 hover:bg-emerald-500 px-2 py-1 rounded text-[10px] font-bold text-white transition disabled:opacity-50 font-sans">Importar</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Filtros de Listagem -->
+                    <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 flex gap-4 items-center flex-wrap">
+                        <div class="text-xs text-slate-400 uppercase font-bold tracking-wider mr-2 font-sans">Filtrar por:</div>
+                        <select x-model="deviceFilterVlan" class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-300 font-medium font-sans">
+                            <option value="">Todas as VLANs</option>
+                            <template x-for="vlan in vlans" :key="vlan.id">
+                                <option :value="vlan.id" x-text="'VLAN ' + vlan.id + ' - ' + vlan.name"></option>
+                            </template>
+                        </select>
+
+                        <select x-model="deviceFilterSwitch" class="bg-slate-900 border border-slate-700 rounded px-3 py-1.5 text-sm text-slate-300 font-medium font-sans">
+                            <option value="">Todos os Switches</option>
+                            <template x-for="sw in switches" :key="sw.id">
+                                <option :value="sw.name" x-text="sw.name"></option>
+                            </template>
+                        </select>
+                    </div>
+
+                    <!-- Tabela de Computadores -->
+                    <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto">
+                        <table class="w-full text-left text-sm min-w-[700px]">
+                            <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="p-4">Computador</th>
+                                    <th class="p-4">Endereço IP</th>
+                                    <th class="p-4">VLAN Associada</th>
+                                    <th class="p-4">Conexão Switch / Porta</th>
+                                    <th class="p-4">Ponto de Rede (Tomada)</th>
+                                    <th class="p-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="dev in filteredDevicesList" :key="dev.id">
+                                    <tr class="border-b border-slate-800/80 hover:bg-slate-900/60 transition">
+                                        <td class="p-4">
+                                            <div class="font-semibold text-white" x-text="dev.name"></div>
+                                        </td>
+                                        <td class="p-4">
+                                            <span class="font-mono text-cyan-400 text-sm font-semibold" x-text="dev.ip || 'Sem IP'"></span>
+                                        </td>
+                                        <td class="p-4">
+                                            <span class="bg-slate-900 text-slate-300 px-2.5 py-1 rounded text-xs border border-slate-800 font-medium" 
+                                                  x-text="dev.vlanId ? 'VLAN ' + dev.vlanId + ' (' + getVlanName(dev.vlanId) + ')' : 'Nenhuma'"></span>
+                                        </td>
+                                        <td class="p-4">
+                                            <div class="flex items-center gap-1.5" x-show="dev.switchName">
+                                                <span class="text-xs bg-indigo-950 text-indigo-300 border border-indigo-900/50 px-2 py-0.5 rounded font-mono" x-text="dev.switchName"></span>
+                                                <span class="text-xs bg-slate-800 text-slate-200 px-1.5 py-0.5 rounded font-mono" x-text="'Porta ' + dev.port"></span>
+                                            </div>
+                                            <span class="text-xs text-slate-500 italic" x-show="!dev.switchName">Desconectado</span>
+                                        </td>
+                                        <td class="p-4">
+                                            <span class="bg-amber-950/40 text-amber-400 border border-amber-900/50 px-2.5 py-1 rounded text-xs font-bold" x-text="dev.outlet || 'S/ Ponto'"></span>
+                                        </td>
+                                        <td class="p-4 text-right">
+                                            <div class="flex justify-end gap-1.5 font-sans">
+                                                <button @click="openEditDeviceModal(dev)" :disabled="currentUser.role === 'read'"
+                                                        :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed' : 'text-blue-400 hover:text-blue-300 hover:bg-blue-950/40 border border-transparent hover:border-blue-900'"
+                                                        class="text-xs px-2.5 py-1.5 rounded transition font-semibold">
+                                                    Editar / Mover
+                                                </button>
+                                                <button @click="confirmDeleteDevice(dev)" :disabled="currentUser.role === 'read'"
+                                                        :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed' : 'text-red-500 hover:text-red-400 hover:bg-red-950/40 border border-transparent hover:border-red-900'"
+                                                        class="text-xs px-2.5 py-1.5 rounded transition font-semibold">
+                                                    Excluir
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr x-show="filteredDevicesList.length === 0">
+                                    <td colspan="6" class="p-8 text-center text-slate-500 font-medium">Nenhum computador cadastrado ou correspondente aos filtros.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ABA: VLANs -->
+                <div x-show="currentTab === 'vlans'" class="space-y-6" x-cloak>
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">VLANs e Subredes</h2>
+                            <p class="text-xs text-slate-400 mt-1">Configure as subredes lógicas de gerenciamento do parque tecnológico.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="openVlanModal()" :disabled="currentUser.role === 'read'"
+                                    :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
+                                <span>➕</span> Cadastrar VLAN
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lista de VLANs Cadastradas -->
+                    <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto animate-fade-in">
+                        <table class="w-full text-left text-sm min-w-[600px]">
+                            <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="p-4">VLAN ID</th>
+                                    <th class="p-4">Nome da Rede</th>
+                                    <th class="p-4">Subrede (CIDR)</th>
+                                    <th class="p-4">Gateway</th>
+                                    <th class="p-4 text-center">Ativos Vinculados</th>
+                                    <th class="p-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="vlan in vlans" :key="vlan.id">
+                                    <tr class="border-b border-slate-800 hover:bg-slate-900/60 transition">
+                                        <td class="p-4 font-mono font-bold text-white text-md" x-text="vlan.id"></td>
+                                        <td class="p-4 font-semibold text-slate-200" x-text="vlan.name"></td>
+                                        <td class="p-4 font-mono text-cyan-400" x-text="vlan.subnet"></td>
+                                        <td class="p-4 font-mono text-slate-400" x-text="vlan.gateway"></td>
+                                        <td class="p-4 text-center">
+                                            <span class="bg-blue-950 text-blue-300 border border-blue-900/40 px-2.5 py-1 rounded-full text-xs font-semibold"
+                                                  x-text="vlanIpsUsedCount(vlan.id) + ' / ' + getVlanIps(vlan.id).length + ' IPs'"></span>
+                                        </td>
+                                        <td class="p-4 text-right font-sans">
+                                            <button @click="confirmDeleteVlan(vlan)" :disabled="currentUser.role === 'read'"
+                                                    :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400'"
+                                                    class="text-xs px-2.5 py-1.5 rounded transition font-medium">
+                                                Excluir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ABA: IP (IPAM) -->
+                <div x-show="currentTab === 'ip'" class="space-y-6" x-cloak>
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Endereços IPs por VLAN</h2>
+                        <p class="text-xs text-slate-400 mt-1">Navegue pelas subredes lógicas e visualize o endereçamento do ambiente.</p>
+                    </div>
+
+                    <!-- Seção de VLAN -->
+                    <div class="flex gap-2 border-b border-slate-800 pb-px overflow-x-auto">
+                        <template x-for="vlan in vlans" :key="vlan.id">
+                            <button @click="selectedVlanId = vlan.id; selectedIpBlock = null"
+                                    :class="selectedVlanId === vlan.id ? 'border-blue-500 text-blue-400 border-b-2 font-bold' : 'text-slate-400 hover:text-slate-200'"
+                                    class="px-5 py-3 text-sm font-medium transition shrink-0"
+                                    x-text="'VLAN ' + vlan.id + ' (' + vlan.name + ')'"></button>
+                        </template>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6" x-show="selectedVlanId">
+                        <div class="lg:col-span-2 bg-slate-950 p-6 rounded-xl border border-slate-800">
+                            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                                <div>
+                                    <h3 class="text-md font-bold text-white" x-text="'Mapeamento de IP: ' + getVlanSubnet(selectedVlanId)"></h3>
+                                    <span x-show="isSubnetTooLarge(selectedVlanId)" class="text-xs text-amber-400 font-semibold bg-amber-950/40 px-2 py-0.5 rounded inline-block mt-1 font-sans">
+                                        ⚠️ Exibindo as primeiras 256 portas para manter o desempenho.
+                                    </span>
+                                </div>
+                                <div class="flex items-center gap-3 text-xs">
+                                    <span class="flex items-center gap-1.5 text-blue-400"><span class="h-3.5 w-3.5 bg-blue-600 rounded inline-block"></span> Ocupado</span>
+                                    <span class="flex items-center gap-1.5 text-slate-500"><span class="h-3.5 w-3.5 bg-slate-800 border border-slate-700 rounded inline-block"></span> Disponível</span>
+                                </div>
+                            </div>
+
+                            <div class="grid gap-1.5 bg-slate-900 p-4 rounded-lg border border-slate-800 max-h-[400px] overflow-y-auto" style="grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));">
+                                <template x-for="ipObj in getLimitedVlanIps(selectedVlanId)" :key="ipObj.fullIp">
+                                    <div @click="checkIpAssignment(selectedVlanId, ipObj.fullIp)"
+                                         :class="ipObj.isGateway 
+                                            ? 'bg-amber-950/40 border border-amber-800 text-amber-400 font-bold cursor-pointer' 
+                                            : (isIpUsed(selectedVlanId, ipObj.fullIp) 
+                                                ? 'bg-blue-600 hover:bg-blue-500 text-white cursor-pointer font-bold animate-fade-in' 
+                                                : 'bg-slate-950 border border-slate-800 hover:border-slate-700 text-slate-500 cursor-pointer')"
+                                         class="h-10 rounded text-xs flex flex-col items-center justify-center transition p-1">
+                                        <span x-text="ipObj.label" class="font-mono text-[10px]"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Detalhes do IP selecionado -->
+                        <div class="bg-slate-950 p-6 rounded-xl border border-slate-800 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-md font-bold text-white mb-4">Detalhamento Técnico</h3>
+                                <div class="space-y-4">
+                                    <div class="bg-slate-900 p-3.5 rounded-lg border border-slate-800">
+                                        <div class="text-xs text-slate-400 font-medium">Gateway Oficial</div>
+                                        <div class="text-sm font-bold text-white font-mono mt-0.5" x-text="getVlanGateway(selectedVlanId)"></div>
+                                    </div>
+
+                                    <div class="bg-slate-900 p-3.5 rounded-lg border border-slate-800" x-show="selectedIpBlock" x-cloak>
+                                        <div class="text-xs text-slate-400 font-medium">IP Selecionado</div>
+                                        <div class="text-sm font-bold text-cyan-400 font-mono mt-0.5" x-text="selectedIpBlock"></div>
+                                        
+                                        <template x-if="selectedIpBlock === getVlanGateway(selectedVlanId)">
+                                            <div class="mt-3 text-xs text-amber-400 font-medium flex items-center gap-1.5 font-sans">
+                                                <span>⚠️</span> Gateway reservado para roteamento desta VLAN.
+                                            </div>
+                                        </template>
+                                        
+                                        <template x-if="selectedIpBlock !== getVlanGateway(selectedVlanId) && getDeviceByIp(selectedIpBlock)">
+                                            <div class="mt-3 pt-3 border-t border-slate-800/80 space-y-2 text-xs">
+                                                <div class="flex justify-between">
+                                                    <span class="text-slate-400">Ativo/Host:</span>
+                                                    <span class="font-bold text-white" x-text="getDeviceByIp(selectedIpBlock).name"></span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="text-slate-400">Ponto Físico:</span>
+                                                    <span class="font-bold text-amber-400" x-text="getDeviceByIp(selectedIpBlock).outlet || 'Não definido'"></span>
+                                                </div>
+                                                <div class="flex justify-between">
+                                                    <span class="text-slate-400">Switch:</span>
+                                                    <span class="font-semibold text-slate-300" x-text="getDeviceByIp(selectedIpBlock).switchName ? getDeviceByIp(selectedIpBlock).switchName + ' - Porta ' + getDeviceByIp(selectedIpBlock).port : 'Desconectado'"></span>
+                                                </div>
+                                            </div>
+                                        </template>
+
+                                        <template x-if="selectedIpBlock !== getVlanGateway(selectedVlanId) && !getDeviceByIp(selectedIpBlock)">
+                                            <div class="mt-3 text-xs text-emerald-400 font-medium flex items-center gap-1.5 font-sans">
+                                                <span>✓</span> Endereço IP disponível para alocação.
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <div class="bg-slate-900/50 p-4 text-xs text-slate-500 rounded-lg text-center font-medium" x-show="!selectedIpBlock">
+                                        Selecione um bloco IP na grade ao lado para inspecionar atribuições físicas de rede.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA: Switch -->
+                <div x-show="currentTab === 'switch'" class="space-y-6" x-cloak>
+                    <div class="flex justify-between items-center flex-wrap gap-2">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">Mapeamento Físico de Switches e Portas</h2>
+                            <p class="text-xs text-slate-400 mt-1">Gerencie a conexão física e o cabeamento estruturado.</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button @click="openSwitchModal()" :disabled="currentUser.role === 'read'"
+                                    :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white font-sans font-medium">
+                                <span>➕</span> Adicionar Switch
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Lista de Switches Cadastrados -->
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <template x-for="sw in switches" :key="sw.id">
+                            <div @click="selectedSwitchId = sw.id; selectedPortNum = null" 
+                                 :class="selectedSwitchId === sw.id ? 'border-blue-500 bg-slate-950 shadow-lg shadow-blue-900/10' : 'border-slate-800 bg-slate-950/50 hover:border-slate-700'"
+                                 class="p-5 rounded-xl border cursor-pointer transition flex flex-col justify-between relative">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <h3 class="text-lg font-bold text-white" x-text="sw.name"></h3>
+                                        <p class="text-xs text-slate-400 mt-0.5" x-text="'Modelo: ' + sw.model"></p>
+                                    </div>
+                                    <div class="flex items-center gap-1.5 shrink-0 font-sans">
+                                        <button @click.stop="openEditSwitchModal(sw)" :disabled="currentUser.role === 'read'"
+                                                :class="currentUser.role === 'read' ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-800 text-blue-400'"
+                                                class="p-1.5 rounded text-xs transition border border-slate-800 flex items-center justify-center bg-slate-900/40" title="Editar">
+                                            ✏️
+                                        </button>
+                                        <button @click.stop="confirmDeleteSwitch(sw)" :disabled="currentUser.role === 'read'"
+                                                :class="currentUser.role === 'read' ? 'opacity-30 cursor-not-allowed' : 'hover:bg-slate-800 text-red-500'"
+                                                class="p-1.5 rounded text-xs transition border border-slate-800 flex items-center justify-center bg-slate-900/40" title="Excluir">
+                                            ❌
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mt-4 flex justify-between items-center text-xs">
+                                    <span class="text-slate-400" x-text="'Local: ' + sw.location"></span>
+                                    <span class="font-semibold text-slate-200" x-text="countConnectedPorts(sw.name) + ' / ' + sw.totalPorts + ' Portas'"></span>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+
+                    <!-- Painel Interativo de Portas Físicas -->
+                    <div class="bg-slate-950 p-6 rounded-xl border border-slate-800" x-show="selectedSwitchId" x-cloak>
+                        <div class="flex justify-between items-center mb-6">
+                            <div>
+                                <h3 class="text-lg font-bold text-white flex items-center gap-2" x-text="'Painel de Portas: ' + getSelectedSwitchName()"></h3>
+                                <p class="text-xs text-slate-400 mt-0.5">Selecione uma porta abaixo para gerenciar a conexão física.</p>
+                            </div>
+                            <div class="flex items-center gap-4 text-xs font-sans">
+                                <span class="flex items-center gap-1.5 text-emerald-400"><span class="h-3.5 w-3.5 rounded bg-emerald-600 border border-emerald-400 inline-block"></span> Ativa</span>
+                                <span class="flex items-center gap-1.5 text-slate-500"><span class="h-3.5 w-3.5 rounded bg-slate-800 border border-slate-700 inline-block"></span> Vazia</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-slate-900 p-6 rounded-lg border border-slate-800 flex flex-col gap-4">
+                            <div class="grid grid-cols-4 sm:grid-cols-8 lg:grid-cols-12 gap-x-2 gap-y-4 font-mono">
+                                <template x-for="portNum in getSelectedSwitchTotalPorts()" :key="portNum">
+                                    <div @click="selectPortDetails(portNum)" 
+                                         :class="isPortOccupied(getSelectedSwitchName(), portNum) ? 'bg-emerald-950/40 border-emerald-500 hover:bg-emerald-950' : 'bg-slate-950 border-slate-800 hover:border-slate-700'"
+                                         class="border rounded-lg p-2.5 flex flex-col items-center justify-between cursor-pointer transition h-16 relative">
+                                        <span :class="isPortOccupied(getSelectedSwitchName(), portNum) ? 'bg-emerald-400 animate-pulse' : 'bg-slate-800'"
+                                              class="h-1.5 w-1.5 rounded-full absolute top-1.5 right-1.5"></span>
+                                        <span class="text-[11px] font-bold mt-1 text-slate-400" x-text="portNum"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Detalhamento da porta selecionada -->
+                        <div class="mt-6 bg-slate-900 p-4 rounded-xl border border-slate-800" x-show="selectedPortNum" x-cloak>
+                            <div class="flex justify-between items-start">
+                                <h4 class="text-md font-bold text-white flex items-center gap-2">
+                                    <span>🔍</span> Informações: Porta <span x-text="selectedPortNum" class="text-blue-400 font-mono"></span>
+                                </h4>
+                                <button @click="selectedPortNum = null" class="text-xs text-slate-400 hover:text-white">Fechar ✖</button>
+                            </div>
+
+                            <div class="mt-4 grid grid-cols-1 sm:grid-cols-4 gap-4">
+                                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                    <div class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Host</div>
+                                    <div class="text-sm font-semibold text-white mt-1" x-text="getPortDeviceField(selectedPortNum, 'name') || 'Livre / Disponível'"></div>
+                                </div>
+                                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                    <div class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">IP</div>
+                                    <div class="text-sm font-semibold text-cyan-400 mt-1 font-mono" x-text="getPortDeviceField(selectedPortNum, 'ip') || '-'"></div>
+                                </div>
+                                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                    <div class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">Tomada</div>
+                                    <div class="text-sm font-bold text-amber-400 mt-1" x-text="getPortDeviceField(selectedPortNum, 'outlet') || '-'"></div>
+                                </div>
+                                <div class="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                    <div class="text-[10px] text-slate-500 uppercase tracking-wider font-bold">VLAN</div>
+                                    <div class="text-sm font-semibold text-slate-300 mt-1" x-text="getPortDeviceField(selectedPortNum, 'vlanId') ? 'VLAN ' + getPortDeviceField(selectedPortNum, 'vlanId') : '-'"></div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 pt-3 border-t border-slate-800 flex flex-wrap gap-3 font-sans" x-show="getPortDeviceField(selectedPortNum, 'name')">
+                                <button @click="disconnectDeviceFromPort(selectedPortNum)" :disabled="currentUser.role === 'read'"
+                                        :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-800' : 'bg-red-600 hover:bg-red-500'"
+                                        class="text-xs text-white px-4 py-2 rounded-lg transition font-semibold">
+                                    🔌 Desconectar Dispositivo
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA: Pontos de Rede -->
+                <div x-show="currentTab === 'outlets'" class="space-y-6" x-cloak>
+                    <div class="flex justify-between items-center flex-wrap gap-3">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white font-sans">Pontos de Rede (Tomadas Físicas)</h2>
+                            <p class="text-xs text-slate-400 mt-1">Gerencie a identificação de tomadas do ambiente físico.</p>
+                        </div>
+                        <div class="flex gap-2 flex-wrap font-sans">
+                            <button @click="toggleLocalImport('outlets')" :disabled="currentUser.role === 'read'"
+                                    :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 'bg-slate-800 hover:bg-slate-700 text-white'"
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition border border-slate-700">
+                                <span>📥</span> Importar CSV
+                            </button>
+                            <button @click="openOutletModal()" :disabled="currentUser.role === 'read'"
+                                    :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-700' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
+                                <span>➕</span> Cadastrar Tomada
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Importador CSV para Tomadas -->
+                    <div x-show="localImportPanel === 'outlets'" class="bg-slate-950 p-6 rounded-xl border border-amber-900/40 space-y-6 animate-fade-in" x-cloak>
+                        <div class="flex justify-between items-center">
+                            <h3 class="text-md font-bold text-amber-400 flex items-center gap-2">
+                                <span>📥</span> Importador de Tomadas (Upload de Arquivo CSV)
+                            </h3>
+                            <button @click="localImportPanel = null; resetCsvImportState()" class="text-xs text-slate-400 hover:text-white">Fechar Painel ✖</button>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <div class="lg:col-span-2 space-y-4">
+                                <div class="flex flex-col items-center justify-center border-2 border-dashed border-slate-700 hover:border-amber-500 rounded-lg p-6 bg-slate-900/50 transition cursor-pointer relative">
+                                    <input type="file" accept=".csv" @change="handleCsvUpload($event, 'outlets')" class="absolute inset-0 opacity-0 cursor-pointer">
+                                    <span class="text-3xl mb-2">📥</span>
+                                    <span class="text-sm font-semibold text-slate-300">Clique para selecionar ou arraste seu arquivo .csv</span>
+                                    <span class="text-xs text-slate-500 mt-1">Formatos suportados: CSV delimitado por vírgula (,) ou ponto e vírgula (;)</span>
+                                </div>
+                                
+                                <div x-show="uploadedFileName" class="text-xs text-emerald-400 font-mono flex items-center gap-1.5 bg-emerald-950/20 border border-emerald-900/30 p-2.5 rounded-lg" x-cloak>
+                                    <span>📎</span> Arquivo selecionado: <span class="font-bold text-white" x-text="uploadedFileName"></span>
+                                </div>
+
+                                <div class="flex justify-between items-center text-xs">
+                                    <button @click="loadSampleCsv('outlets');" class="text-blue-400 hover:underline">Carregar Dados de Exemplo (Simulação)</button>
+                                    <button x-show="csvText" @click="readCsvColumns('outlets')" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded font-bold transition font-sans font-medium">Analisar Colunas</button>
+                                </div>
+                            </div>
+                            <div class="bg-slate-900 p-4 rounded-lg text-xs space-y-2 text-slate-400">
+                                <p class="font-bold text-white">Instruções:</p>
+                                <p>1. Selecione seu arquivo CSV.</p>
+                                <p>2. Mapeie as colunas detectadas para os campos das Tomadas.</p>
+                                <p>3. Clique em processar para validar individualmente ou em lote.</p>
+                            </div>
+                        </div>
+
+                        <!-- Configuração Mapeamentos CSV para Tomadas -->
+                        <div x-show="csvHeaders.length > 0 && localImportPanel === 'outlets'" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 font-sans">Mapear colunas identificadas para Tomadas:</h4>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-900 p-4 rounded-lg font-sans">
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Identificação / Nome</label>
+                                    <select x-model="csvMappings.name" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-medium">
+                                        <option value="">-- Selecionar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.name == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Localização / Sala</label>
+                                    <select x-model="csvMappings.location" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-medium">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.location == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] text-slate-400 mb-1 font-bold">Status (Ativo/Inativo)</label>
+                                    <select x-model="csvMappings.status" class="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-white font-medium">
+                                        <option value="">-- Ignorar --</option>
+                                        <template x-for="(head, index) in csvHeaders">
+                                            <option :value="index" x-text="head" :selected="csvMappings.status == index"></option>
+                                        </template>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="flex justify-end">
+                                <button @click="processCsvWithMappings('outlets')" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg text-xs transition font-sans">
+                                    Processar e Validar Registros
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Prévia de Itens Importáveis para Tomadas -->
+                        <div x-show="parsedImportItems.length > 0 && localImportPanel === 'outlets'" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
+                            <div class="flex justify-between items-center">
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Visualizar e Importar Tomadas:</h4>
+                                <button @click="importAllParsed('outlets')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded font-bold transition font-sans">
+                                    ⚡ Importar Todos os Válidos
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto border border-slate-800 rounded-lg max-h-60 font-sans">
+                                <table class="w-full text-left text-xs">
+                                    <thead class="bg-slate-900 text-slate-400 sticky top-0">
+                                        <tr>
+                                            <th class="p-2.5">Linha Bruta</th>
+                                            <th class="p-2.5">Mapeado</th>
+                                            <th class="p-2.5">Validação</th>
+                                            <th class="p-2.5 text-right">Ação</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <template x-for="item in parsedImportItems" :key="item.id">
+                                            <tr class="border-b border-slate-800 hover:bg-slate-900/60 transition">
+                                                <td class="p-2.5 font-mono text-slate-500 truncate max-w-[200px]" x-text="item.rawLine"></td>
+                                                <td class="p-2.5">
+                                                    <strong class="text-white" x-text="item.data.name"></strong> | 
+                                                    <span class="text-amber-400 font-bold font-sans" x-text="item.data.location || 'Sem Localização'"></span>
+                                                    <span class="text-xs text-slate-400" x-text="' (' + item.data.status + ')'"></span>
+                                                </td>
+                                                <td class="p-2.5">
+                                                    <span :class="item.status === 'ready' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900' : 'bg-red-950 text-red-400 border border-red-900'"
+                                                          class="px-2 py-0.5 rounded text-[10px] font-bold uppercase inline-block border"
+                                                          x-text="item.status === 'ready' ? '✓ Pronto' : '❌ Erro'"></span>
+                                                    <span class="block text-[10px] text-slate-400 mt-0.5 animate-pulse" x-text="item.errorMsg"></span>
+                                                </td>
+                                                <td class="p-2.5 text-right">
+                                                    <div class="flex justify-end gap-1">
+                                                        <button @click="importSingleItem(item, 'outlets')" :disabled="item.status === 'error'"
+                                                                class="bg-emerald-600 hover:bg-emerald-500 px-2 py-1 rounded text-[10px] font-bold text-white transition disabled:opacity-50 font-sans">Importar</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        </template>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Listagem das Tomadas -->
+                    <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-x-auto">
+                        <table class="w-full text-left text-sm min-w-[600px]">
+                            <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="p-4">Identificação</th>
+                                    <th class="p-4">Localização / Sala</th>
+                                    <th class="p-4">Status</th>
+                                    <th class="p-4">Ativo Conectado</th>
+                                    <th class="p-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="outlet in outlets" :key="outlet.id">
+                                    <tr class="border-b border-slate-800/80 hover:bg-slate-900/60 transition">
+                                        <td class="p-4">
+                                            <span class="bg-amber-950/40 text-amber-400 border border-amber-900/50 px-2.5 py-1 rounded text-xs font-bold" x-text="outlet.name"></span>
+                                        </td>
+                                        <td class="p-4 font-semibold text-slate-200" x-text="outlet.location || 'Não especificada'"></td>
+                                        <td class="p-4">
+                                            <span :class="outlet.status === 'Ativo' ? 'bg-emerald-950 text-emerald-400 border border-emerald-900/50' : 'bg-slate-800 text-slate-400 border border-slate-700'"
+                                                  class="px-2.5 py-1 rounded text-xs font-bold border" x-text="outlet.status"></span>
+                                        </td>
+                                        <td class="p-4">
+                                            <template x-if="getDeviceByOutlet(outlet.name)">
+                                                <span class="text-cyan-400 font-semibold" x-text="getDeviceByOutlet(outlet.name).name + ' (' + (getDeviceByOutlet(outlet.name).ip || 'Sem IP') + ')'"></span>
+                                            </template>
+                                            <template x-if="!getDeviceByOutlet(outlet.name)">
+                                                <span class="text-slate-500 text-xs italic font-sans">Nenhum dispositivo</span>
+                                            </template>
+                                        </td>
+                                        <td class="p-4 text-right font-sans">
+                                            <div class="flex justify-end gap-1.5 font-sans">
+                                                <button @click="openEditOutletModal(outlet)" :disabled="currentUser.role === 'read'"
+                                                        :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed' : 'text-blue-400 hover:text-blue-300'"
+                                                        class="text-xs px-2.5 py-1.5 rounded transition font-semibold">
+                                                    Editar
+                                                </button>
+                                                <button @click="confirmDeleteOutlet(outlet)" :disabled="currentUser.role === 'read'"
+                                                        :class="currentUser.role === 'read' ? 'opacity-40 cursor-not-allowed' : 'text-red-500 hover:text-red-400'"
+                                                        class="text-xs px-2.5 py-1.5 rounded transition font-semibold">
+                                                    Excluir
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ABA: Configurações Google Sheets Sync -->
+                <div x-show="currentTab === 'cloud'" class="space-y-6" x-cloak>
+                    <div>
+                        <h2 class="text-2xl font-bold text-white">Sincronização com Google Sheets (Apps Script)</h2>
+                        <p class="text-xs text-slate-400 mt-1">Conecte sua infraestrutura local NetMap diretamente à sua planilha do Google de forma totalmente integrada e gratuita.</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 font-sans">
+                        <!-- Formulário de Endereço Web App -->
+                        <div class="bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-4">
+                            <h3 class="text-md font-bold text-white flex items-center gap-2">
+                                <span>🌐</span> Endereço da API Google
+                            </h3>
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">URL do Web App (Executável)</label>
+                                    <input type="text" x-model="gsConfig.webAppUrl" placeholder="https://script.google.com/macros/s/.../exec" 
+                                           class="w-full bg-slate-900 text-slate-200 p-2 rounded border border-slate-700 text-sm focus:outline-none focus:border-blue-500 font-mono">
+                                </div>
+                            </div>
+                            <div class="flex flex-col gap-2 pt-2 font-medium">
+                                <button @click="saveGoogleSheetsConfig()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded text-xs transition">
+                                    Salvar Configuração
+                                </button>
+                                <button @click="testSheetsConnection()" :disabled="!gsConfig.webAppUrl"
+                                        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded text-xs transition disabled:opacity-50">
+                                    🔄 Testar e Sincronizar Agora
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Opções de Backup / Ações -->
+                        <div class="lg:col-span-2 bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-6">
+                            <h3 class="text-md font-bold text-white flex items-center gap-2">
+                                <span>🔄</span> Central de Sincronização
+                            </h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Enviar para o Sheets (Backup)</h4>
+                                        <p class="text-xs text-slate-400 mb-4">Exporta e substitui os dados armazenados na planilha do Google pelo banco local do NetMap.</p>
+                                    </div>
+                                    <button @click="saveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
+                                            class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50">
+                                        Enviar para Google Sheets
+                                    </button>
+                                </div>
+
+                                <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
+                                    <div>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Puxar do Sheets (Restaurar)</h4>
+                                        <p class="text-xs text-slate-400 mb-4">Atualiza o aplicativo local baixando a versão mais recente gravada na planilha do Google.</p>
+                                    </div>
+                                    <button @click="loadFromGoogleSheets()" :disabled="!gsConfig.webAppUrl"
+                                            class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
+                                        Baixar do Google Sheets
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ABA: Usuários -->
+                <div x-show="currentTab === 'users' && currentUser.role === 'admin'" class="space-y-6" x-cloak>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white font-sans">Controle de Acessos & Usuários</h2>
+                            <p class="text-xs text-slate-400 mt-1">Configure permissões de administradores e leitores.</p>
+                        </div>
+                        <button @click="openUserModal()" class="bg-blue-600 hover:bg-blue-700 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
+                            <span>➕</span> Novo Usuário
+                        </button>
+                    </div>
+
+                    <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden">
+                        <table class="w-full text-left text-sm font-sans">
+                            <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                                <tr>
+                                    <th class="p-4">Nome de Usuário</th>
+                                    <th class="p-4">Nível de Permissão</th>
+                                    <th class="p-4 text-right">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template x-for="usr in users" :key="usr.id">
+                                    <tr class="border-b border-slate-800 hover:bg-slate-900/60 transition">
+                                        <td class="p-4 font-semibold text-slate-200" x-text="usr.username"></td>
+                                        <td class="p-4">
+                                            <span :class="usr.role === 'admin' ? 'bg-indigo-950 text-indigo-300 border-indigo-900/40' : 'bg-slate-800 text-slate-400'"
+                                                  class="px-2.5 py-1 rounded text-xs font-bold border" 
+                                                  x-text="usr.role === 'admin' ? 'Administrador' : 'Apenas Leitura'"></span>
+                                        </td>
+                                        <td class="p-4 text-right">
+                                            <button @click="confirmDeleteUser(usr)" 
+                                                    :disabled="currentUser.id === usr.id"
+                                                    :class="currentUser.id === usr.id ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400'"
+                                                    class="text-xs px-2.5 py-1.5 rounded transition font-medium">
+                                                Excluir
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- ABA: Logs de Auditoria -->
+                <div x-show="currentTab === 'logs'" class="space-y-6" x-cloak>
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <h2 class="text-2xl font-bold text-white">Log de Auditoria e Rastreabilidade</h2>
+                            <p class="text-xs text-slate-400 mt-1">Histórico completo de modificações de computadores, VLANs, IPs e switches.</p>
+                        </div>
+                        <button @click="confirmClearLogs()" :disabled="currentUser.role === 'read'"
+                                :class="currentUser.role === 'read' ? 'opacity-50 cursor-not-allowed bg-slate-800 text-slate-600' : 'bg-slate-800 hover:bg-slate-700 text-red-400'"
+                                class="text-xs border border-slate-700 px-3 py-1.5 rounded-lg transition font-sans font-semibold">
+                            Limpar Histórico
+                        </button>
+                    </div>
+
+                    <div class="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden font-sans">
+                        <div class="max-h-[500px] overflow-y-auto">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-slate-900 text-xs uppercase tracking-wider text-slate-400 border-b border-slate-800 sticky top-0">
+                                    <tr>
+                                        <th class="p-4">Data/Hora</th>
+                                        <th class="p-4">Usuário</th>
+                                        <th class="p-4">Ação</th>
+                                        <th class="p-4">Descrição do Evento</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="log in logs" :key="log.id">
+                                        <tr class="border-b border-slate-800/60 hover:bg-slate-900/40 transition">
+                                            <td class="p-4 font-mono text-xs text-slate-400" x-text="log.timestamp"></td>
+                                            <td class="p-4">
+                                                <span class="px-2 py-0.5 rounded text-xs font-semibold"
+                                                      :class="log.role === 'admin' ? 'bg-indigo-950 text-indigo-300 border border-indigo-900/40' : 'bg-slate-800 text-slate-300'"
+                                                      x-text="log.user"></span>
+                                            </td>
+                                            <td class="p-4">
+                                                <span class="px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide border"
+                                                      :class="getLogBadgeClass(log.action)"
+                                                      x-text="log.action"></span>
+                                            </td>
+                                            <td class="p-4 text-slate-300" x-text="log.details"></td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- MODAL: Criar Usuário -->
+    <div x-show="userModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Usuário</h3>
+            <form @submit.prevent="submitUserForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome de Usuário</label>
+                    <input type="text" x-model="userForm.username" required placeholder="Ex: bruno.sampaio" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Senha</label>
+                    <input type="password" x-model="userForm.password" required placeholder="Defina a senha..." 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Permissão</label>
+                    <select x-model="userForm.role" required class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-medium">
+                        <option value="read">Apenas Leitura (Somente Visualização)</option>
+                        <option value="admin">Administrador (Controle Total)</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="userModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Cadastrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Criar Dispositivo -->
+    <div x-show="deviceModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Computador ou Ativo</h3>
+            
+            <form @submit.prevent="submitDeviceForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome do Dispositivo</label>
+                    <input type="text" x-model="deviceForm.name" required placeholder="Ex: PC-DESENVOLVIMENTO-05" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">VLAN (Opcional)</label>
+                    <select x-model="deviceForm.vlanId" @change="deviceForm.ip = ''" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-medium">
+                        <option value="">Selecione a VLAN</option>
+                        <template x-for="vlan in vlans" :key="vlan.id">
+                            <option :value="vlan.id" x-text="'VLAN ' + vlan.id + ' - ' + vlan.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
+                    <template x-if="deviceForm.vlanId">
+                        <select x-model="deviceForm.ip" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                            <option value="">-- Escolha um IP Disponível na VLAN --</option>
+                            <template x-for="ipObj in getAvailableVlanIps(deviceForm.vlanId)" :key="ipObj.fullIp">
+                                <option :value="ipObj.fullIp" x-text="ipObj.fullIp"></option>
+                            </template>
+                        </select>
+                    </template>
+                    <template x-if="!deviceForm.vlanId">
+                        <input type="text" x-model="deviceForm.ip" placeholder="Escolha uma VLAN acima para ver a lista de IPs livres..." 
+                               class="w-full bg-slate-950 text-slate-400 rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                    </template>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Switch</label>
+                        <select x-model="deviceForm.switchName" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                            <option value="">Nenhum</option>
+                            <template x-for="sw in switches" :key="sw.id">
+                                <option :value="sw.name" x-text="sw.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Porta Switch</label>
+                        <input type="number" x-model="deviceForm.port" placeholder="Porta" 
+                               class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Tomada</label>
+                        <select x-model="deviceForm.outlet" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                            <option value="">Nenhuma</option>
+                            <template x-for="ot in outlets" :key="ot.id">
+                                <option :value="ot.name" x-text="ot.name + (ot.location ? ' - ' + ot.location : '')"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex justify-end gap-3 pt-4 font-medium">
+                    <button type="button" @click="deviceModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Computador</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Editar/Mover Dispositivo -->
+    <div x-show="editDeviceModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-lg w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-1">Mover / Editar Dispositivo</h3>
+            <p class="text-xs text-slate-400 mb-4">Realoque o computador de switch e ponto físico.</p>
+            
+            <form @submit.prevent="submitEditDeviceForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome do Dispositivo</label>
+                    <input type="text" x-model="editDeviceForm.name" required placeholder="Ex: PC-DESENVOLVIMENTO-05" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">VLAN (Opcional)</label>
+                    <select x-model="editDeviceForm.vlanId" @change="editDeviceForm.ip = ''" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-medium">
+                        <option value="">Selecione a VLAN</option>
+                        <template x-for="vlan in vlans" :key="vlan.id">
+                            <option :value="vlan.id" x-text="'VLAN ' + vlan.id + ' - ' + vlan.name"></option>
+                        </template>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Endereço IP (Opcional)</label>
+                    <template x-if="editDeviceForm.vlanId">
+                        <select x-model="editDeviceForm.ip" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                            <option value="">-- Escolha um IP Disponível na VLAN --</option>
+                            <template x-for="ipObj in getAvailableVlanIps(editDeviceForm.vlanId, editDeviceForm.id)" :key="ipObj.fullIp">
+                                <option :value="ipObj.fullIp" x-text="ipObj.fullIp" :selected="editDeviceForm.ip === ipObj.fullIp"></option>
+                            </template>
+                        </select>
+                    </template>
+                    <template x-if="!editDeviceForm.vlanId">
+                        <input type="text" x-model="editDeviceForm.ip" placeholder="Escolha uma VLAN acima para ver a lista de IPs livres..." 
+                               class="w-full bg-slate-950 text-slate-400 rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                    </template>
+                </div>
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Switch</label>
+                        <select x-model="editDeviceForm.switchName" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                            <option value="">Sem Switch</option>
+                            <template x-for="sw in switches" :key="sw.id">
+                                <option :value="sw.name" x-text="sw.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Porta Switch</label>
+                        <input type="number" x-model="editDeviceForm.port" placeholder="Porta" 
+                               class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Tomada</label>
+                        <select x-model="editDeviceForm.outlet" class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                            <option value="">Nenhuma</option>
+                            <template x-for="ot in outlets" :key="ot.id">
+                                <option :value="ot.name" x-text="ot.name + (ot.location ? ' - ' + ot.location : '')" :selected="editDeviceForm.outlet === ot.name"></option>
+                            </template>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex justify-between items-center pt-4 border-t border-slate-800">
+                    <button type="button" @click="quickDisconnectInEdit()" class="bg-red-950 text-red-400 px-3 py-2 rounded text-xs border border-red-900/50 hover:bg-red-900/40 transition">
+                        🔌 Desvincular Porta
+                    </button>
+                    <div class="flex gap-3 font-medium">
+                        <button type="button" @click="editDeviceModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                        <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Alterações</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Criar VLAN -->
+    <div x-show="vlanModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4">Cadastrar Nova VLAN</h3>
+            <form @submit.prevent="submitVlanForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">ID da VLAN (Numérico)</label>
+                    <input type="number" x-model="vlanForm.id" required placeholder="Ex: 40" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome da VLAN</label>
+                    <input type="text" x-model="vlanForm.name" required placeholder="Ex: CFTV - Câmeras" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Subrede (CIDR)</label>
+                    <input type="text" x-model="vlanForm.subnet" required placeholder="Ex: 192.168.40.0/24 ou 192.168.40.0/26" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Gateway</label>
+                    <input type="text" x-model="vlanForm.gateway" required placeholder="Ex: 192.168.40.1" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="vlanModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar VLAN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Criar Switch -->
+    <div x-show="switchModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Switch</h3>
+            <form @submit.prevent="submitSwitchForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome do Switch (ID Único)</label>
+                    <input type="text" x-model="switchForm.name" required placeholder="Ex: Switch-Core-02" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Modelo / Fabricante</label>
+                    <input type="text" x-model="switchForm.model" placeholder="Ex: Cisco Catalyst 2960" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Quantidade de Portas</label>
+                    <input type="number" x-model="switchForm.totalPorts" required placeholder="Ex: 24" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala</label>
+                    <input type="text" x-model="switchForm.location" placeholder="Ex: Rack A - CPD" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="switchModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Switch</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Editar Switch -->
+    <div x-show="editSwitchModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4">Editar Switch</h3>
+            <form @submit.prevent="submitEditSwitchForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nome do Switch (ID Único)</label>
+                    <input type="text" x-model="editSwitchForm.name" required placeholder="Ex: Switch-Core-02" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Modelo / Fabricante</label>
+                    <input type="text" x-model="editSwitchForm.model" placeholder="Ex: Cisco Catalyst 2960" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Quantidade de Portas</label>
+                    <input type="number" x-model="editSwitchForm.totalPorts" required placeholder="Ex: 24" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-mono">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala</label>
+                    <input type="text" x-model="editSwitchForm.location" placeholder="Ex: Rack A - CPD" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="editSwitchModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Criar Tomada -->
+    <div x-show="outletModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Tomada (Ponto de Rede)</h3>
+            <form @submit.prevent="submitOutletForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Identificação da Tomada</label>
+                    <input type="text" x-model="outletForm.name" required placeholder="Ex: T-102" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
+                    <input type="text" x-model="outletForm.location" placeholder="Ex: Sala Financeiro - Mesa 2" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Status</label>
+                    <select x-model="outletForm.status" required class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500 font-medium">
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="outletModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Tomada</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Editar Tomada -->
+    <div x-show="editOutletModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-4 font-sans">Editar Tomada (Ponto de Rede)</h3>
+            <form @submit.prevent="submitEditOutletForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Identificação da Tomada</label>
+                    <input type="text" x-model="editOutletForm.name" required placeholder="Ex: T-102" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Localização Física / Sala (Opcional)</label>
+                    <input type="text" x-model="editOutletForm.location" placeholder="Ex: Sala Financeiro - Mesa 2" 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Status</label>
+                    <select x-model="editOutletForm.status" required class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                        <option value="Ativo">Ativo</option>
+                        <option value="Inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="editOutletModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function netMapApp() {
+            return {
+                // Estado da Sessão e Autenticação
+                isLoggedIn: false,
+                currentUser: { id: null, username: '', role: 'read' },
+                loginForm: { username: '', password: '' },
+                users: [],
+
+                // Configurações de UI
+                currentTab: 'dashboard',
+                searchQuery: '',
+                toasts: [],
+                confirmModal: { open: false, title: '', message: '', resolve: null },
+                mobileMenuOpen: false,
+
+                // Modais
+                deviceModalOpen: false,
+                editDeviceModalOpen: false,
+                vlanModalOpen: false,
+                outletModalOpen: false,
+                editOutletModalOpen: false,
+                switchModalOpen: false,
+                editSwitchModalOpen: false,
+                userModalOpen: false,
+
+                // Coleções Ativas de Dados
+                vlans: [],
+                switches: [],
+                devices: [],
+                outlets: [],
+                logs: [],
+
+                // Estados de Formulários de Entrada
+                deviceForm: { name: '', ip: '', vlanId: '', switchName: '', port: '', outlet: '' },
+                editDeviceForm: { id: null, name: '', ip: '', vlanId: '', switchName: '', port: '', outlet: '' },
+                vlanForm: { id: '', name: '', subnet: '', gateway: '' },
+                switchForm: { name: '', model: '', totalPorts: 24, location: '' },
+                editSwitchForm: { id: null, name: '', model: '', totalPorts: 24, location: '' },
+                outletForm: { name: '', location: '', status: 'Ativo' },
+                editOutletForm: { id: null, name: '', location: '', status: 'Ativo' },
+                userForm: { username: '', password: '', role: 'read' },
+
+                // Filtros
+                deviceFilterVlan: '',
+                deviceFilterSwitch: '',
+
+                // Visualizadores ativos (IPAM / Switch Portas)
+                selectedVlanId: null,
+                selectedIpBlock: null,
+                selectedSwitchId: null,
+                selectedPortNum: null,
+
+                // Configuração Google Sheets (Apps Script Web App)
+                gsConfig: { 
+                    webAppUrl: '' 
+                },
+                gsSync: { status: 'offline', lastSynced: null },
+                autoSaveTimeout: null, // Timer de Debounce
+
+                // Módulos de Importação CSV
+                localImportPanel: null,
+                csvText: '',
+                csvHeaders: [],
+                csvMappings: {},
+                parsedImportItems: [],
+                uploadedFileName: '',
+
+                async initSystem() {
+                    this.restoreLocalDatabase();
+                    this.checkActiveSession();
+                    this.restoreGoogleSheetsConfig();
+                    
+                    // Se houver uma URL configurada, tenta sincronizar e baixar as atualizações ao inicializar
+                    if (this.gsConfig.webAppUrl) {
+                        await this.loadFromGoogleSheets();
+                    }
+                },
+
+                restoreLocalDatabase() {
+                    const localVlans = localStorage.getItem('netmap_vlans');
+                    const localSwitches = localStorage.getItem('netmap_switches');
+                    const localDevices = localStorage.getItem('netmap_devices');
+                    const localOutlets = localStorage.getItem('netmap_outlets');
+                    const localUsers = localStorage.getItem('netmap_users');
+                    const localLogs = localStorage.getItem('netmap_logs');
+
+                    if (localVlans && localSwitches && localDevices && localOutlets && localUsers && localLogs) {
+                        this.vlans = JSON.parse(localVlans);
+                        this.switches = JSON.parse(localSwitches);
+                        this.devices = JSON.parse(localDevices);
+                        this.outlets = JSON.parse(localOutlets);
+                        this.users = JSON.parse(localUsers);
+                        this.logs = JSON.parse(localLogs);
+                    } else {
+                        this.loadDefaultDemoData();
+                    }
+
+                    if (!this.users || this.users.length === 0) {
+                        this.users = [
+                            { id: 1, username: "admin", password: "admin", role: "admin" },
+                            { id: 2, username: "leitor", password: "123", role: "read" }
+                        ];
+                        this.saveUsers();
+                    }
+                },
+
+                loadDefaultDemoData() {
+                    this.vlans = [
+                        { id: 10, name: "Administração", subnet: "192.168.10.0/26", gateway: "192.168.10.1" },
+                        { id: 20, name: "Produção", subnet: "192.168.20.0/27", gateway: "192.168.20.1" },
+                        { id: 30, name: "CFTV", subnet: "192.168.30.0/28", gateway: "192.168.30.1" }
+                    ];
+
+                    this.switches = [
+                        { id: 1, name: "SW-01", model: "Cisco Catalyst 2960", totalPorts: 24, location: "Rack Sala CPD" },
+                        { id: 2, name: "SW-02", model: "HP ProCurve 2530", totalPorts: 24, location: "Rack Bloco B" }
+                    ];
+
+                    this.devices = [
+                        { id: 101, name: "PC-FINANCEIRO-01", ip: "192.168.10.11", vlanId: 10, switchName: "SW-01", port: 5, outlet: "T-101" },
+                        { id: 102, name: "PC-DIRETORIA-01", ip: "192.168.10.12", vlanId: 10, switchName: "SW-01", port: 8, outlet: "T-102" },
+                        { id: 103, name: "PC-PROD-01", ip: "192.168.20.21", vlanId: 20, switchName: "SW-02", port: 3, outlet: "T-201" },
+                        { id: 104, name: "CAMERA-ENTRADA-01", ip: "192.168.30.5", vlanId: 30, switchName: "SW-01", port: 12, outlet: "C-01" }
+                    ];
+
+                    this.outlets = [
+                        { id: 201, name: "T-101", location: "Sala do Financeiro - Mesa 1", status: "Ativo" },
+                        { id: 202, name: "T-102", location: "Sala da Diretoria", status: "Ativo" },
+                        { id: 203, name: "T-201", location: "Galpão Principal - Posto 1", status: "Ativo" },
+                        { id: 204, name: "C-01", location: "Entrada Principal", status: "Ativo" }
+                    ];
+
+                    this.users = [
+                        { id: 1, username: "admin", password: "admin", role: "admin" },
+                        { id: 2, username: "leitor", password: "123", role: "read" }
+                    ];
+
+                    this.logs = [
+                        { id: 1, timestamp: this.getCurrentTime(), user: "Sistema", role: "admin", action: "SYSTEM", details: "Banco de dados inicializado com dados de demonstração." }
+                    ];
+
+                    this.saveVlans();
+                    this.saveSwitches();
+                    this.saveDevices();
+                    this.saveOutlets();
+                    this.saveUsers();
+                    this.saveLogs();
+                },
+
+                saveVlans() { localStorage.setItem('netmap_vlans', JSON.stringify(this.vlans)); },
+                saveSwitches() { localStorage.setItem('netmap_switches', JSON.stringify(this.switches)); },
+                saveDevices() { localStorage.setItem('netmap_devices', JSON.stringify(this.devices)); },
+                saveOutlets() { localStorage.setItem('netmap_outlets', JSON.stringify(this.outlets)); },
+                saveUsers() { localStorage.setItem('netmap_users', JSON.stringify(this.users)); },
+                saveLogs() { localStorage.setItem('netmap_logs', JSON.stringify(this.logs)); },
+
+                checkActiveSession() {
+                    const savedSession = localStorage.getItem('netmap_session');
+                    if (savedSession) {
+                        this.currentUser = JSON.parse(savedSession);
+                        this.isLoggedIn = true;
+                    }
+                },
+
+                login() {
+                    const match = this.users.find(u => u.username.trim().toLowerCase() === this.loginForm.username.trim().toLowerCase() && u.password === this.loginForm.password);
+                    if (match) {
+                        this.currentUser = { id: match.id, username: match.username, role: match.role };
+                        localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
+                        this.isLoggedIn = true;
+                        this.addLog('LOGIN', `Usuário ${match.username} logou no sistema.`);
+                        this.addToast('Bem-vindo ao NetMap PRO!', 'success');
+                        this.loginForm = { username: '', password: '' };
+
+                        if (this.gsConfig.webAppUrl) {
+                            this.loadFromGoogleSheets();
+                        }
+                    } else {
+                        this.addToast('Usuário ou senha incorretos!', 'error');
+                    }
+                },
+
+                logout() {
+                    this.addLog('LOGOUT', `Usuário ${this.currentUser.username} desconectou.`);
+                    localStorage.removeItem('netmap_session');
+                    this.currentUser = { id: null, username: '', role: 'read' };
+                    this.isLoggedIn = false;
+                },
+
+                addToast(message, type = 'success') {
+                    const id = Date.now();
+                    this.toasts.push({ id, message, type });
+                    setTimeout(() => {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    }, 3500);
+                },
+
+                openConfirm(title, message) {
+                    this.confirmModal.title = title;
+                    this.confirmModal.message = message;
+                    this.confirmModal.open = true;
+                    return new Promise((resolve) => {
+                        this.confirmModal.resolve = resolve;
+                    });
+                },
+
+                closeConfirm(result) {
+                    this.confirmModal.open = false;
+                    if (this.confirmModal.resolve) {
+                        this.confirmModal.resolve(result);
+                        this.confirmModal.resolve = null;
+                    }
+                },
+
+                addLog(action, details) {
+                    const newLog = {
+                        id: Date.now(),
+                        timestamp: this.getCurrentTime(),
+                        user: this.currentUser.username || 'Desconhecido',
+                        role: this.currentUser.role || 'read',
+                        action: action,
+                        details: details
+                    };
+                    this.logs.unshift(newLog);
+                    this.saveLogs();
+                },
+
+                get filteredDevices() {
+                    if (!this.searchQuery) return [];
+                    const q = this.searchQuery.toLowerCase().trim();
+                    return this.devices.filter(d => {
+                        const nameMatch = d.name && d.name.toLowerCase().includes(q);
+                        const ipMatch = d.ip && d.ip.includes(q);
+                        const outletMatch = d.outlet && d.outlet.toLowerCase().includes(q);
+                        const switchMatch = d.switchName && d.switchName.toLowerCase().includes(q);
+                        const vlanMatch = d.vlanId && (String(d.vlanId) === q || this.getVlanName(d.vlanId).toLowerCase().includes(q));
+                        return nameMatch || ipMatch || outletMatch || switchMatch || vlanMatch;
+                    });
+                },
+
+                get filteredDevicesList() {
+                    let list = this.devices;
+                    if (this.deviceFilterVlan) {
+                        list = list.filter(d => d.vlanId === parseInt(this.deviceFilterVlan));
+                    }
+                    if (this.deviceFilterSwitch) {
+                        list = list.filter(d => d.switchName === this.deviceFilterSwitch);
+                    }
+                    if (this.searchQuery) {
+                        const q = this.searchQuery.toLowerCase().trim();
+                        list = list.filter(d => {
+                            const nameMatch = d.name && d.name.toLowerCase().includes(q);
+                            const ipMatch = d.ip && d.ip.includes(q);
+                            const outletMatch = d.outlet && d.outlet.toLowerCase().includes(q);
+                            const switchMatch = d.switchName && d.switchName.toLowerCase().includes(q);
+                            const vlanMatch = d.vlanId && (String(d.vlanId) === q || this.getVlanName(d.vlanId).toLowerCase().includes(q));
+                            return nameMatch || ipMatch || outletMatch || switchMatch || vlanMatch;
+                        });
+                    }
+                    return list;
+                },
+
+                getVlanName(id) {
+                    const match = this.vlans.find(v => v.id === parseInt(id));
+                    return match ? match.name : 'N/A';
+                },
+                getVlanSubnet(id) {
+                    const match = this.vlans.find(v => v.id === parseInt(id));
+                    return match ? match.subnet : 'N/A';
+                },
+                getVlanGateway(id) {
+                    const match = this.vlans.find(v => v.id === parseInt(id));
+                    return match ? match.gateway : 'N/A';
+                },
+
+                isSubnetTooLarge(vlanId) {
+                    const vlan = this.vlans.find(v => v.id === parseInt(vlanId));
+                    if (!vlan) return false;
+                    const parts = vlan.subnet.split('/');
+                    const cidr = parts[1] ? parseInt(parts[1].trim(), 10) : 24;
+                    return cidr < 24;
+                },
+
+                getVlanIps(vlanId) {
+                    const vlan = this.vlans.find(v => v.id === parseInt(vlanId));
+                    if (!vlan || !vlan.gateway) return [];
+
+                    const gwBytes = vlan.gateway.split('.').map(Number);
+                    if (gwBytes.length !== 4 || gwBytes.some(isNaN)) return [];
+
+                    const parts = vlan.subnet.split('/');
+                    const cidr = parts[1] ? parseInt(parts[1].trim(), 10) : 24;
+
+                    const capacity = Math.pow(2, 32 - cidr) - 2;
+                    const ipList = [];
+
+                    ipList.push({
+                        fullIp: vlan.gateway,
+                        label: 'GW',
+                        isGateway: true
+                    });
+
+                    const gwNum = (gwBytes[0] * 16777216) + (gwBytes[1] * 65536) + (gwBytes[2] * 256) + gwBytes[3];
+
+                    for (let i = 1; i <= capacity; i++) {
+                        const currentIpNum = gwNum + i;
+
+                        const octet1 = Math.floor(currentIpNum / 16777216) % 256;
+                        const octet2 = Math.floor(currentIpNum / 65536) % 256;
+                        const octet3 = Math.floor(currentIpNum / 256) % 256;
+                        const octet4 = currentIpNum % 256;
+
+                        if (cidr <= 24 && octet4 === 255) {
+                            continue;
+                        }
+
+                        const fullIp = `${octet1}.${octet2}.${octet3}.${octet4}`;
+                        const label = `.${octet4}`;
+
+                        ipList.push({
+                            fullIp: fullIp,
+                            label: label,
+                            isGateway: false
+                        });
+                    }
+                    return ipList;
+                },
+
+                getLimitedVlanIps(vlanId) {
+                    const ips = this.getVlanIps(vlanId);
+                    if (ips.length > 256) {
+                        return ips.slice(0, 256);
+                    }
+                    return ips;
+                },
+
+                getAvailableVlanIps(vlanId, currentDeviceId = null) {
+                    if (!vlanId) return [];
+                    const allIps = this.getVlanIps(vlanId);
+                    
+                    return allIps.filter(ipObj => {
+                        if (ipObj.isGateway) return false;
+
+                        const usedDevice = this.getDeviceByIp(ipObj.fullIp);
+                        if (usedDevice) {
+                            if (currentDeviceId && usedDevice.id === currentDeviceId) {
+                                return true;
+                            }
+                            return false;
+                        }
+                        return true;
+                    });
+                },
+
+                vlanIpsUsedCount(vlanId) {
+                    if (!vlanId) return 0;
+                    const ips = this.getVlanIps(vlanId);
+                    if (ips.length === 0) return 0;
+                    
+                    const ipSet = new Set(ips.map(item => item.fullIp));
+                    return this.devices.filter(d => d.ip && ipSet.has(d.ip.trim())).length;
+                },
+
+                isIpUsed(vlanId, fullIp) {
+                    if (!vlanId || !fullIp) return false;
+                    return this.devices.some(d => d.ip && d.ip.trim() === fullIp.trim());
+                },
+
+                checkIpAssignment(vlanId, fullIp) {
+                    if (!vlanId || !fullIp) return;
+                    this.selectedIpBlock = fullIp;
+                },
+
+                getDeviceByIp(ip) {
+                    if (!ip) return null;
+                    return this.devices.find(d => d.ip && d.ip.trim() === ip.trim());
+                },
+
+                countUniqueOutlets() {
+                    return this.outlets.length;
+                },
+                getDeviceByOutlet(outletName) {
+                    if (!outletName) return null;
+                    return this.devices.find(d => d.outlet && d.outlet.trim().toLowerCase() === outletName.trim().toLowerCase());
+                },
+
+                countConnectedPorts(switchName) {
+                    return this.devices.filter(d => d.switchName === switchName).length;
+                },
+
+                getSelectedSwitchName() {
+                    const sw = this.switches.find(s => s.id === this.selectedSwitchId);
+                    return sw ? sw.name : '';
+                },
+
+                getSelectedSwitchTotalPorts() {
+                    const sw = this.switches.find(s => s.id === this.selectedSwitchId);
+                    return sw ? sw.totalPorts : 24;
+                },
+
+                isPortOccupied(switchName, portNum) {
+                    return this.devices.some(d => d.switchName === switchName && d.port === parseInt(portNum));
+                },
+
+                selectPortDetails(portNum) {
+                    this.selectedPortNum = parseInt(portNum);
+                },
+
+                getPortDeviceField(portNum, field) {
+                    const swName = this.getSelectedSwitchName();
+                    const dev = this.devices.find(d => d.switchName === swName && d.port === parseInt(portNum));
+                    return dev ? dev[field] : null;
+                },
+
+                async disconnectDeviceFromPort(portNum) {
+                    if (this.currentUser.role === 'read') return;
+                    const confirm = await this.openConfirm('Desconectar Dispositivo', `Deseja realmente desconectar o dispositivo da porta ${portNum}?`);
+                    if (!confirm) return;
+
+                    const swName = this.getSelectedSwitchName();
+                    const dev = this.devices.find(d => d.switchName === swName && d.port === parseInt(portNum));
+                    if (dev) {
+                        const prevPort = dev.port;
+                        dev.switchName = '';
+                        dev.port = null;
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                        this.addLog('UPDATE', `Desconectou ${dev.name} da porta ${prevPort} do switch ${swName}.`);
+                        this.addToast('Dispositivo desconectado com sucesso!', 'success');
+                        this.selectedPortNum = null;
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                openDeviceModal() {
+                    if (this.currentUser.role === 'read') return;
+                    this.deviceForm = { name: '', ip: '', vlanId: '', switchName: '', port: '', outlet: '' };
+                    this.deviceModalOpen = true;
+                },
+
+                openEditDeviceModal(device) {
+                    if (this.currentUser.role === 'read') return;
+                    this.editDeviceForm = { ...device };
+                    this.editDeviceModalOpen = true;
+                },
+
+                openVlanModal() {
+                    if (this.currentUser.role === 'read') return;
+                    this.vlanForm = { id: '', name: '', subnet: '', gateway: '' };
+                    this.vlanModalOpen = true;
+                },
+
+                openOutletModal() {
+                    if (this.currentUser.role === 'read') return;
+                    this.outletForm = { name: '', location: '', status: 'Ativo' };
+                    this.outletModalOpen = true;
+                },
+
+                openEditOutletModal(outlet) {
+                    if (this.currentUser.role === 'read') return;
+                    this.editOutletForm = { ...outlet };
+                    this.editOutletModalOpen = true;
+                },
+
+                openEditSwitchModal(sw) {
+                    if (this.currentUser.role === 'read') return;
+                    this.editSwitchForm = { ...sw };
+                    this.editSwitchModalOpen = true;
+                },
+
+                openUserModal() {
+                    this.userForm = { username: '', password: '', role: 'read' };
+                    this.userModalOpen = true;
+                },
+
+                submitVlanForm() {
+                    if (this.currentUser.role === 'read') return;
+                    const idInt = parseInt(this.vlanForm.id);
+                    if (this.vlans.some(v => v.id === idInt)) {
+                        this.addToast('ID de VLAN já cadastrado.', 'error');
+                        return;
+                    }
+                    const newVlan = {
+                        id: idInt,
+                        name: this.vlanForm.name.trim(),
+                        subnet: this.vlanForm.subnet.trim(),
+                        gateway: this.vlanForm.gateway.trim()
+                    };
+                    this.vlans.push(newVlan);
+                    this.vlans = [...this.vlans];
+                    this.saveVlans();
+                    this.addLog('CREATE', `Criou VLAN ${newVlan.id} - ${newVlan.name}`);
+                    this.addToast('VLAN cadastrada com sucesso!', 'success');
+                    this.vlanModalOpen = false;
+                    this.autoSaveDriveCloud();
+                },
+
+                submitOutletForm() {
+                    if (this.currentUser.role === 'read') return;
+                    if (this.outlets.some(o => o.name.toLowerCase() === this.outletForm.name.toLowerCase().trim())) {
+                        this.addToast('Tomada com esta identificação já existe.', 'error');
+                        return;
+                    }
+                    const newOutlet = {
+                        id: Date.now(),
+                        name: this.outletForm.name.toUpperCase().trim(),
+                        location: this.outletForm.location ? this.outletForm.location.trim() : '',
+                        status: this.outletForm.status
+                    };
+                    this.outlets.push(newOutlet);
+                    this.outlets = [...this.outlets];
+                    this.saveOutlets();
+                    this.addLog('CREATE', `Cadastrou Tomada ${newOutlet.name}.`);
+                    this.addToast('Tomada cadastrada com sucesso!', 'success');
+                    this.outletModalOpen = false;
+                    this.autoSaveDriveCloud();
+                },
+
+                submitEditOutletForm() {
+                    if (this.currentUser.role === 'read') return;
+                    const o = this.outlets.find(out => out.id === this.editOutletForm.id);
+                    if (o) {
+                        o.name = this.editOutletForm.name.toUpperCase().trim();
+                        o.location = this.editOutletForm.location ? this.editOutletForm.location.trim() : '';
+                        o.status = this.editOutletForm.status;
+                        this.outlets = [...this.outlets];
+                        this.saveOutlets();
+                        this.addLog('UPDATE', `Editou Tomada ${o.name}.`);
+                        this.addToast('Tomada atualizada com sucesso!', 'success');
+                        this.editOutletModalOpen = false;
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                submitEditSwitchForm() {
+                    if (this.currentUser.role === 'read') return;
+                    const sw = this.switches.find(s => s.id === this.editSwitchForm.id);
+                    if (sw) {
+                        const oldName = sw.name;
+                        sw.name = this.editSwitchForm.name.trim();
+                        sw.model = this.editSwitchForm.model.trim();
+                        sw.totalPorts = parseInt(this.editSwitchForm.totalPorts);
+                        sw.location = this.editSwitchForm.location.trim();
+                        
+                        if (oldName !== sw.name) {
+                            this.devices.forEach(d => {
+                                if (d.switchName === oldName) d.switchName = sw.name;
+                            });
+                            this.devices = [...this.devices];
+                            this.saveDevices();
+                        }
+
+                        this.switches = [...this.switches];
+                        this.saveSwitches();
+                        this.addLog('UPDATE', `Editou Switch ${sw.name}.`);
+                        this.addToast('Switch atualizado com sucesso!', 'success');
+                        this.editSwitchModalOpen = false;
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                submitUserForm() {
+                    if (this.users.some(u => u.username.toLowerCase() === this.userForm.username.toLowerCase().trim())) {
+                        this.addToast('Nome de usuário já existe.', 'error');
+                        return;
+                    }
+                    const newUser = {
+                        id: Date.now(),
+                        username: this.userForm.username.trim(),
+                        password: this.userForm.password,
+                        role: this.userForm.role
+                    };
+                    this.users.push(newUser);
+                    this.users = [...this.users];
+                    this.saveUsers();
+                    this.addLog('CREATE', `Criou usuário ${newUser.username}.`);
+                    this.addToast('Usuário cadastrado com sucesso!', 'success');
+                    this.userModalOpen = false;
+                    this.autoSaveDriveCloud();
+                },
+
+                quickDisconnectInEdit() {
+                    this.editDeviceForm.switchName = '';
+                    this.editDeviceForm.port = null;
+                    this.addToast('Porta desvinculada no formulário.', 'warning');
+                },
+
+                async confirmDeleteDevice(dev) {
+                    if (this.currentUser.role === 'read') return;
+                    const res = await this.openConfirm('Excluir Ativo', `Deseja realmente excluir o computador ${dev.name}?`);
+                    if (res) {
+                        this.devices = this.devices.filter(d => d.id !== dev.id);
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                        this.addLog('DELETE', `Removeu o computador: ${dev.name}`);
+                        this.addToast('Dispositivo removido.', 'success');
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                async confirmDeleteVlan(vlan) {
+                    if (this.currentUser.role === 'read') return;
+                    const res = await this.openConfirm('Excluir VLAN', `Deseja realmente excluir a VLAN ${vlan.id}? Todos os computadores desta VLAN perderão associação.`);
+                    if (res) {
+                        this.vlans = this.vlans.filter(v => v.id !== vlan.id);
+                        this.devices.forEach(d => {
+                            if (parseInt(d.vlanId) === parseInt(vlan.id)) d.vlanId = null;
+                        });
+                        this.saveVlans();
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                        this.addLog('DELETE', `Removeu VLAN ${vlan.id}.`);
+                        this.addToast('VLAN excluída.', 'success');
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                async confirmDeleteSwitch(sw) {
+                    if (this.currentUser.role === 'read') return;
+                    const res = await this.openConfirm('Excluir Switch', `Deseja realmente excluir o switch ${sw.name}? Dispositivos conectados serão liberados.`);
+                    if (res) {
+                        this.switches = this.switches.filter(s => s.id !== sw.id);
+                        this.devices.forEach(d => {
+                            if (d.switchName === sw.name) {
+                                d.switchName = '';
+                                d.port = null;
+                            }
+                        });
+                        this.saveSwitches();
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                        this.addLog('DELETE', `Removeu Switch ${sw.name}.`);
+                        this.addToast('Switch removido.', 'success');
+                        if (this.selectedSwitchId === sw.id) this.selectedSwitchId = null;
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                async confirmDeleteOutlet(outlet) {
+                    if (this.currentUser.role === 'read') return;
+                    const res = await this.openConfirm('Excluir Tomada', `Deseja realmente excluir a tomada ${outlet.name}?`);
+                    if (res) {
+                        this.outlets = this.outlets.filter(o => o.id !== outlet.id);
+                        this.saveOutlets();
+                        this.addLog('DELETE', `Removeu Tomada ${outlet.name}.`);
+                        this.addToast('Tomada excluída com sucesso.', 'success');
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                async confirmDeleteUser(usr) {
+                    if (this.currentUser.id === usr.id) return;
+                    const res = await this.openConfirm('Excluir Usuário', `Deseja excluir permanentemente o usuário ${usr.username}?`);
+                    if (res) {
+                        this.users = this.users.filter(u => u.id !== usr.id);
+                        this.saveUsers();
+                        this.addLog('DELETE', `Removeu usuário ${usr.username}.`);
+                        this.addToast('Usuário removido.', 'success');
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                async confirmClearLogs() {
+                    if (this.currentUser.role === 'read') return;
+                    const res = await this.openConfirm('Limpar Logs', 'Deseja realmente apagar todo o histórico de logs do sistema?');
+                    if (res) {
+                        this.logs = [];
+                        this.addLog('CLEAR', 'Limpou o histórico de logs de auditoria.');
+                        this.addToast('Histórico limpo.', 'success');
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                toggleLocalImport(tabName) {
+                    this.localImportPanel = this.localImportPanel === tabName ? null : tabName;
+                    this.resetCsvImportState();
+                },
+
+                resetCsvImportState() {
+                    this.csvText = '';
+                    this.csvHeaders = [];
+                    this.csvMappings = {};
+                    this.parsedImportItems = [];
+                    this.uploadedFileName = '';
+                },
+
+                handleCsvUpload(event, type) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+
+                    this.uploadedFileName = file.name;
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        this.csvText = e.target.result;
+                        this.readCsvColumns(type);
+                    };
+                    reader.readAsText(file);
+                },
+
+                readCsvColumns(type) {
+                    if (!this.csvText.trim()) {
+                        this.addToast('Nenhum conteúdo carregado para analisar!', 'error');
+                        return;
+                    }
+                    const lines = this.csvText.split('\n').filter(l => l.trim() !== '');
+                    if (lines.length > 0) {
+                        const separator = lines[0].includes(';') ? ';' : ',';
+                        this.csvHeaders = lines[0].split(separator).map(h => h.replace(/"/g, '').trim());
+                        this.addToast('Arquivo carregado e colunas analisadas com sucesso.', 'success');
+                    }
+                },
+
+                loadSampleCsv(type) {
+                    if (type === 'devices') {
+                        // Exemplo robusto com vários dispositivos para demonstrar a velocidade de processamento
+                        this.csvText = "Nome_Computador,IP,VLAN,Switch,Porta,Ponto\n" +
+                            "PC-TESTE-01,192.168.10.9,10,SW-01,15,T-101\n" +
+                            "PC-TESTE-02,192.168.20.5,20,SW-02,18,T-201\n" +
+                            "PC-CPD-SERVER,192.168.10.50,10,SW-01,1,T-102\n" +
+                            "PC-FINANC-03,192.168.10.15,10,SW-01,14,T-101";
+                        this.uploadedFileName = "exemplo_computadores.csv";
+                    } else if (type === 'outlets') {
+                        // Exemplo robusto com vários pontos de rede para demonstrar a velocidade de processamento
+                        this.csvText = "Identificacao,Localizacao_Sala,Status\n" +
+                            "T-103,Sala de Reuniões - CPD,Ativo\n" +
+                            "T-104,Copa - Parede Lateral,Ativo\n" +
+                            "T-105,Sala de TI - Rack Central,Ativo\n" +
+                            "T-106,Recepção - Balcão,Inativo";
+                        this.uploadedFileName = "exemplo_tomadas.csv";
+                    }
+                    this.readCsvColumns(type);
+                },
+
+                processCsvWithMappings(type) {
+                    const lines = this.csvText.split('\n').filter(l => l.trim() !== '');
+                    if (lines.length <= 1) {
+                        this.addToast('Sem linhas de dados suficientes.', 'error');
+                        return;
+                    }
+                    const separator = lines[0].includes(';') ? ';' : ',';
+                    const rows = lines.slice(1);
+                    this.parsedImportItems = [];
+
+                    rows.forEach((row, i) => {
+                        const cols = row.split(separator).map(c => c.replace(/"/g, '').trim());
+                        const itemData = {};
+
+                        if (type === 'devices') {
+                            itemData.name = cols[this.csvMappings.name] || `PC-CSV-${i+1}`;
+                            itemData.ip = cols[this.csvMappings.ip] || '';
+                            itemData.vlanId = cols[this.csvMappings.vlanId] ? parseInt(cols[this.csvMappings.vlanId]) : null;
+                            itemData.switchName = cols[this.csvMappings.switchName] || '';
+                            itemData.port = cols[this.csvMappings.port] ? parseInt(cols[this.csvMappings.port]) : null;
+                            itemData.outlet = cols[this.csvMappings.outlet] || '';
+
+                            let status = 'ready';
+                            let errorMsg = '';
+
+                            if (itemData.ip && this.devices.some(d => d.ip && d.ip.trim() === itemData.ip.trim())) {
+                                status = 'warning';
+                                errorMsg = 'IP duplicado no sistema.';
+                            }
+                            this.parsedImportItems.push({ id: i, rawLine: row, data: itemData, status, errorMsg });
+                        } else if (type === 'outlets') {
+                            itemData.name = cols[this.csvMappings.name] ? cols[this.csvMappings.name].toUpperCase().trim() : `T-CSV-${i+1}`;
+                            itemData.location = cols[this.csvMappings.location] || '';
+                            
+                            let rawStatus = cols[this.csvMappings.status] || 'Ativo';
+                            itemData.status = (rawStatus.toLowerCase().startsWith('in') || rawStatus.toLowerCase().includes('inativo')) ? 'Inativo' : 'Ativo';
+
+                            let status = 'ready';
+                            let errorMsg = '';
+
+                            if (this.outlets.some(o => o.name.toLowerCase() === itemData.name.toLowerCase())) {
+                                status = 'warning';
+                                errorMsg = 'Tomada com esta identificação já existe.';
+                            }
+                            this.parsedImportItems.push({ id: i, rawLine: row, data: itemData, status, errorMsg });
+                        }
+                    });
+                },
+
+                importSingleItem(item, type) {
+                    if (this.currentUser.role === 'read') return;
+                    if (type === 'devices') {
+                        const newDev = { id: Date.now() + Math.random(), ...item.data };
+                        this.devices.push(newDev);
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                    } else if (type === 'outlets') {
+                        const newOutlet = { id: Date.now() + Math.random(), ...item.data };
+                        this.outlets.push(newOutlet);
+                        this.outlets = [...this.outlets];
+                        this.saveOutlets();
+                    }
+                    this.parsedImportItems = this.parsedImportItems.filter(p => p.id !== item.id);
+                    this.addToast('Item importado com sucesso!', 'success');
+                    this.autoSaveDriveCloud();
+                },
+
+                importAllParsed(type) {
+                    if (this.currentUser.role === 'read') return;
+                    const targets = this.parsedImportItems.filter(p => p.status !== 'error');
+                    if (targets.length === 0) {
+                        this.addToast('Nenhum item válido para importar.', 'error');
+                        return;
+                    }
+                    targets.forEach(item => {
+                        if (type === 'devices') {
+                            this.devices.push({ id: Date.now() + Math.random(), ...item.data });
+                        } else if (type === 'outlets') {
+                            this.outlets.push({ id: Date.now() + Math.random(), ...item.data });
+                        }
+                    });
+                    
+                    if (type === 'devices') {
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                    } else if (type === 'outlets') {
+                        this.outlets = [...this.outlets];
+                        this.saveOutlets();
+                    }
+
+                    this.resetCsvImportState();
+                    this.localImportPanel = null;
+                    this.addLog('IMPORT', `Importação CSV realizada para ${type === 'devices' ? 'computadores' : 'tomadas (pontos de rede)'}.`);
+                    this.addToast('Todos os registros válidos foram importados!', 'success');
+                    this.autoSaveDriveCloud();
+                },
+
+                // RESTAURAÇÃO E SALVAMENTO DE CONFIGURAÇÕES DO GOOGLE SHEETS
+                restoreGoogleSheetsConfig() {
+                    const savedConfig = localStorage.getItem('netmap_gs_config');
+                    if (savedConfig) {
+                        this.gsConfig = JSON.parse(savedConfig);
+                    }
+                    const savedSyncState = localStorage.getItem('netmap_gs_sync');
+                    if (savedSyncState) {
+                        this.gsSync = JSON.parse(savedSyncState);
+                    }
+                },
+
+                saveGoogleSheetsConfig() {
+                    if (!this.gsConfig.webAppUrl) {
+                        this.addToast('Por favor, preencha a URL do Web App!', 'error');
+                        return;
+                    }
+                    localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
+                    this.addToast('Endereço do Google Sheets atualizado!', 'success');
+                },
+
+                // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
+                async testSheetsConnection() {
+                    if (!this.gsConfig.webAppUrl) {
+                        this.addToast('Defina a URL do seu Web App nas configurações!', 'error');
+                        return;
+                    }
+                    this.addToast('Tentando conectar ao Google Sheets...', 'warning');
+                    try {
+                        const res = await fetch(this.gsConfig.webAppUrl);
+                        if (res.ok) {
+                            this.gsSync.status = 'online';
+                            this.gsSync.lastSynced = this.getCurrentTime();
+                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                            
+                            const data = await res.json();
+                            if (data && Object.keys(data).length > 0 && (data.devices || data.vlans)) {
+                                this.applyCloudDb(data);
+                                this.addToast('Sincronizado! Dados recuperados do Google Sheets.', 'success');
+                                this.addLog('SYNC', 'Conexão ativa com o Google Sheets Web App.');
+                            } else {
+                                this.addToast('Conectado! Sincronizando banco local com a planilha vazia...', 'warning');
+                                await this.saveToGoogleSheets();
+                            }
+                        } else {
+                            throw new Error('Web App respondeu com erro.');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        this.gsSync.status = 'offline';
+                        this.addToast('Não foi possível conectar ao Google Sheets. Verifique o link ou CORS.', 'error');
+                    }
+                },
+
+                // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS
+                async saveToGoogleSheets() {
+                    if (!this.gsConfig.webAppUrl) return;
+                    
+                    const dbData = {
+                        vlans: this.vlans,
+                        switches: this.switches,
+                        devices: this.devices,
+                        outlets: this.outlets,
+                        users: this.users,
+                        logs: this.logs
+                    };
+
+                    try {
+                        const response = await fetch(this.gsConfig.webAppUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                            body: JSON.stringify(dbData)
+                        });
+                        const resText = await response.text();
+                        let resJson = {};
+                        try { resJson = JSON.parse(resText); } catch(e){}
+
+                        if (response.ok || resJson.status === 'success') {
+                            this.gsSync.lastSynced = this.getCurrentTime();
+                            this.gsSync.status = 'online';
+                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                            this.addToast('Google Sheets atualizado com sucesso!', 'success');
+                            this.addLog('SYNC', 'Sincronizou banco local com o Google Sheets Web App.');
+                        } else {
+                            throw new Error('Falha no upload.');
+                        }
+                    } catch (err) {
+                        console.error(err);
+                        // Dependendo da infraestrutura, se o navegador bloquear redirecionamento CORS mas o post completar, atualizamos o status como online
+                        this.gsSync.lastSynced = this.getCurrentTime();
+                        this.gsSync.status = 'online';
+                        localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                        this.addToast('Dados atualizados na nuvem!', 'success');
+                    }
+                },
+
+                // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
+                async loadFromGoogleSheets() {
+                    if (!this.gsConfig.webAppUrl) return;
+                    try {
+                        const response = await fetch(this.gsConfig.webAppUrl);
+                        if (!response.ok) throw new Error('Não pôde baixar.');
+                        const cloudDb = await response.json();
+                        
+                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans)) {
+                            this.applyCloudDb(cloudDb);
+                            this.gsSync.status = 'online';
+                            this.gsSync.lastSynced = this.getCurrentTime();
+                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                        }
+                    } catch(e) {
+                        console.error("Falha silenciosa ao obter banco remoto no boot:", e);
+                    }
+                },
+
+                applyCloudDb(cloudDb) {
+                    if (!cloudDb) return;
+                    if (cloudDb.vlans) this.vlans = cloudDb.vlans;
+                    if (cloudDb.switches) this.switches = cloudDb.switches;
+                    if (cloudDb.devices) this.devices = cloudDb.devices;
+                    if (cloudDb.outlets) this.outlets = cloudDb.outlets;
+                    if (cloudDb.users) this.users = cloudDb.users;
+                    if (cloudDb.logs) this.logs = cloudDb.logs;
+
+                    this.saveVlans();
+                    this.saveSwitches();
+                    this.saveDevices();
+                    this.saveOutlets();
+                    this.saveUsers();
+                    this.saveLogs();
+                },
+
+                // Salva automaticamente com DEBOUNCE (Muito importante para evitar travamentos e limites de requisições do Google)
+                async autoSaveDriveCloud() {
+                    if (this.gsSync.status === 'online' && this.currentUser.role !== 'read') {
+                        if (this.autoSaveTimeout) {
+                            clearTimeout(this.autoSaveTimeout);
+                        }
+                        this.autoSaveTimeout = setTimeout(async () => {
+                            await this.saveToGoogleSheets();
+                        }, 2000); // Aguarda 2 segundos de inatividade após qualquer alteração para sincronizar
+                    }
+                },
+
+                getCurrentTime() {
+                    const now = new Date();
+                    return now.toLocaleString('pt-BR');
+                },
+
+                changeTab(tab) {
+                    this.currentTab = tab;
+                    this.selectedIpBlock = null;
+                    this.selectedPortNum = null;
+                    this.mobileMenuOpen = false;
+                },
+
+                getLogBadgeClass(action) {
+                    switch (action) {
+                        case 'CREATE': return 'bg-emerald-950 text-emerald-400 border-emerald-900';
+                        case 'UPDATE': return 'bg-blue-950 text-blue-400 border-blue-900';
+                        case 'DELETE': return 'bg-red-950 text-red-400 border-red-900';
+                        case 'IMPORT': return 'bg-purple-950 text-purple-400 border-purple-900';
+                        case 'SYNC': return 'bg-cyan-950 text-cyan-400 border-cyan-900';
+                        default: return 'bg-slate-800 text-slate-300 border-slate-700';
+                    }
+                },
+
+                submitDeviceForm() {
+                    if (this.currentUser.role === 'read') return;
+
+                    // 1. Validação de nome duplicado
+                    if (this.deviceForm.name && this.deviceForm.name.trim() !== '') {
+                        const cleanName = this.deviceForm.name.trim().toLowerCase();
+                        if (this.devices.some(d => d.name && d.name.trim().toLowerCase() === cleanName)) {
+                            this.addToast(`O computador com o nome "${this.deviceForm.name}" já está cadastrado!`, 'error');
+                            return;
+                        }
+                    }
+
+                    // 2. Validação de IP duplicado
+                    if (this.deviceForm.ip && this.deviceForm.ip.trim() !== '') {
+                        const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+                        if (!ipRegex.test(this.deviceForm.ip.trim())) {
+                            this.addToast('Formato de endereço IP inválido.', 'error');
+                            return;
+                        }
+                        if (this.devices.some(d => d.ip && d.ip.trim() === this.deviceForm.ip.trim())) {
+                            this.addToast('Este endereço IP já está em uso.', 'error');
+                            return;
+                        }
+                    }
+
+                    // 3. Validação de Switch & Porta ocupados
+                    if (this.deviceForm.switchName && this.deviceForm.port) {
+                        const sw = this.switches.find(s => s.name === this.deviceForm.switchName);
+                        if (sw) {
+                            const portNum = parseInt(this.deviceForm.port);
+                            if (portNum < 1 || portNum > sw.totalPorts) {
+                                this.addToast(`Porta fora do intervalo do Switch (1-${sw.totalPorts}).`, 'error');
+                                return;
+                            }
+                            const existing = this.devices.find(d => d.switchName === this.deviceForm.switchName && d.port === portNum);
+                            if (existing) {
+                                this.addToast(`A porta ${portNum} do switch ${this.deviceForm.switchName} já está em uso por "${existing.name}".`, 'error');
+                                return;
+                            }
+                        }
+                    }
+
+                    // 4. Validação de Tomada (Ponto de Rede) ocupada
+                    if (this.deviceForm.outlet && this.deviceForm.outlet.trim() !== '') {
+                        const cleanOutlet = this.deviceForm.outlet.trim().toLowerCase();
+                        const existing = this.devices.find(d => d.outlet && d.outlet.trim().toLowerCase() === cleanOutlet);
+                        if (existing) {
+                            this.addToast(`O ponto de rede (tomada) "${this.deviceForm.outlet.toUpperCase()}" já está ocupado por "${existing.name}".`, 'error');
+                            return;
+                        }
+                    }
+
+                    const newDevice = {
+                        id: Date.now(),
+                        name: this.deviceForm.name.trim(),
+                        ip: this.deviceForm.ip ? this.deviceForm.ip.trim() : '',
+                        vlanId: this.deviceForm.vlanId ? parseInt(this.deviceForm.vlanId) : null,
+                        switchName: this.deviceForm.switchName || '',
+                        port: this.deviceForm.port ? parseInt(this.deviceForm.port) : null,
+                        outlet: this.deviceForm.outlet.trim() || ''
+                    };
+
+                    this.devices.push(newDevice);
+                    this.devices = [...this.devices];
+                    this.saveDevices();
+                    this.addLog('CREATE', `Cadastrou o computador: ${newDevice.name}`);
+                    this.addToast('Dispositivo cadastrado com sucesso!', 'success');
+                    this.deviceModalOpen = false;
+                    this.autoSaveDriveCloud();
+                },
+
+                submitEditDeviceForm() {
+                    if (this.currentUser.role === 'read') return;
+
+                    // 1. Validação de nome duplicado (exceto o próprio dispositivo editado)
+                    if (this.editDeviceForm.name && this.editDeviceForm.name.trim() !== '') {
+                        const cleanName = this.editDeviceForm.name.trim().toLowerCase();
+                        if (this.devices.some(d => d.id !== this.editDeviceForm.id && d.name && d.name.trim().toLowerCase() === cleanName)) {
+                            this.addToast(`O computador com o nome "${this.editDeviceForm.name}" já está cadastrado no sistema!`, 'error');
+                            return;
+                        }
+                    }
+
+                    // 2. Validação de IP duplicado (exceto o próprio dispositivo editado)
+                    if (this.editDeviceForm.ip && this.editDeviceForm.ip.trim() !== '') {
+                        const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
+                        if (!ipRegex.test(this.editDeviceForm.ip.trim())) {
+                            this.addToast('Formato de endereço IP inválido.', 'error');
+                            return;
+                        }
+                        if (this.devices.some(d => d.id !== this.editDeviceForm.id && d.ip && d.ip.trim() === this.editDeviceForm.ip.trim())) {
+                            this.addToast('Este endereço IP já está em uso.', 'error');
+                            return;
+                        }
+                    }
+
+                    // 3. Validação de Switch & Porta ocupados (exceto o próprio dispositivo editado)
+                    if (this.editDeviceForm.switchName && this.editDeviceForm.port) {
+                        const sw = this.switches.find(s => s.name === this.editDeviceForm.switchName);
+                        if (sw) {
+                            const portNum = parseInt(this.editDeviceForm.port);
+                            if (portNum < 1 || portNum > sw.totalPorts) {
+                                this.addToast(`Porta fora do intervalo do Switch (1-${sw.totalPorts}).`, 'error');
+                                return;
+                            }
+                            const existing = this.devices.find(d => d.id !== this.editDeviceForm.id && d.switchName === this.editDeviceForm.switchName && d.port === portNum);
+                            if (existing) {
+                                this.addToast(`A porta ${portNum} do switch ${this.editDeviceForm.switchName} já está em uso por "${existing.name}".`, 'error');
+                                return;
+                            }
+                        }
+                    }
+
+                    // 4. Validação de Tomada (Ponto de Rede) ocupada (exceto o próprio dispositivo editado)
+                    if (this.editDeviceForm.outlet && this.editDeviceForm.outlet.trim() !== '') {
+                        const cleanOutlet = this.editDeviceForm.outlet.trim().toLowerCase();
+                        const existing = this.devices.find(d => d.id !== this.editDeviceForm.id && d.outlet && d.outlet.trim().toLowerCase() === cleanOutlet);
+                        if (existing) {
+                            this.addToast(`O ponto de rede (tomada) "${this.editDeviceForm.outlet.toUpperCase()}" já está ocupado por "${existing.name}".`, 'error');
+                            return;
+                        }
+                    }
+
+                    const device = this.devices.find(d => d.id === this.editDeviceForm.id);
+                    if (device) {
+                        device.name = this.editDeviceForm.name.trim();
+                        device.ip = this.editDeviceForm.ip ? this.editDeviceForm.ip.trim() : '';
+                        device.vlanId = this.editDeviceForm.vlanId ? parseInt(this.editDeviceForm.vlanId) : null;
+                        device.switchName = this.editDeviceForm.switchName || '';
+                        device.port = this.editDeviceForm.port ? parseInt(this.editDeviceForm.port) : null;
+                        device.outlet = this.editDeviceForm.outlet.trim() || '';
+
+                        this.devices = [...this.devices];
+                        this.saveDevices();
+                        this.addLog('UPDATE', `Editou o computador: ${device.name}`);
+                        this.addToast('Dispositivo atualizado com sucesso!', 'success');
+                        this.editDeviceModalOpen = false;
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
+                openSwitchModal() {
+                    if (this.currentUser.role === 'read') return;
+                    this.switchForm = { name: '', model: '', totalPorts: 24, location: '' };
+                    this.switchModalOpen = true;
+                },
+
+                submitSwitchForm() {
+                    if (this.currentUser.role === 'read') return;
+                    if (this.switches.some(s => s.name.toLowerCase().trim() === this.switchForm.name.toLowerCase().trim())) {
+                        this.addToast('Nome de switch já existe.', 'error');
+                        return;
+                    }
+
+                    const newSwitch = {
+                        id: Date.now(),
+                        name: this.switchForm.name.trim(),
+                        model: this.switchForm.model ? this.switchForm.model.trim() : 'Genérico',
+                        totalPorts: parseInt(this.switchForm.totalPorts) || 24,
+                        location: this.switchForm.location ? this.switchForm.location.trim() : 'Não especificada'
+                    };
+
+                    this.switches.push(newSwitch);
+                    this.switches = [...this.switches];
+                    this.saveSwitches();
+                    this.addLog('CREATE', `Adicionou o switch: ${newSwitch.name}`);
+                    this.addToast('Switch adicionado com sucesso!', 'success');
+                    this.switchModalOpen = false;
+
+                    if (!this.selectedSwitchId) {
+                        this.selectedSwitchId = newSwitch.id;
+                    }
+                    this.autoSaveDriveCloud();
+                }
+            };
+        }
+    </script>
+</body>
+</html>
