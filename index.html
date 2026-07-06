@@ -80,35 +80,6 @@
                 </template>
             </div>
 
-            <!-- Indicador Visual de Sincronização em Andamento -->
-            <div x-show="isLoadingCloud" class="bg-blue-950/40 border border-blue-800/50 p-3 rounded-lg text-xs text-center text-blue-300 animate-pulse flex items-center justify-center gap-2" x-cloak>
-                <svg class="animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                <span>Sincronizando usuários e dados com a nuvem...</span>
-            </div>
-
-            <!-- Alerta de Falha de Conexão com a Nuvem -->
-            <div x-show="cloudSyncError" class="bg-red-950/40 border border-red-900/50 p-3.5 rounded-lg text-xs text-red-300 space-y-1.5" x-cloak>
-                <div class="flex items-center gap-2 font-bold text-white">
-                    <span>⚠️</span> Erro de Conexão com o Google Sheets
-                </div>
-                <p class="leading-relaxed">
-                    Não foi possível carregar as credenciais mais recentes. Verifique:
-                </p>
-                <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-slate-400">
-                    <li>Se o script no Google Sheets foi implantado como <strong class="text-slate-300">Web App</strong>.</li>
-                    <li>Se as configurações de acesso estão para <strong class="text-slate-300">"Anyone" (Qualquer um, inclusive anônimos)</strong>.</li>
-                    <li>Se a URL do Apps Script está correta nas configurações.</li>
-                </ul>
-                <div class="pt-1 flex gap-2">
-                    <button type="button" @click="loadFromGoogleSheets()" class="text-blue-400 hover:underline font-bold text-[11px]">Tentar Novamente 🔄</button>
-                    <span class="text-slate-700">|</span>
-                    <button type="button" @click="cloudSyncError = false" class="text-slate-400 hover:text-white font-bold text-[11px]">Entrar com conta local</button>
-                </div>
-            </div>
-
             <form @submit.prevent="login()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Usuário</label>
@@ -128,12 +99,8 @@
                     </div>
                 </div>
 
-                <button type="submit" 
-                        :disabled="isLoadingCloud"
-                        :class="isLoadingCloud ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'"
-                        class="w-full font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
-                    <span x-show="!isLoadingCloud">Entrar no Sistema</span>
-                    <span x-show="isLoadingCloud">Aguarde Sincronização...</span>
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
+                    Entrar no Sistema
                 </button>
             </form>
         </div>
@@ -414,7 +381,7 @@
 
                         <!-- Configuração Mapeamentos CSV -->
                         <div x-show="csvHeaders.length > 0 && localImportPanel === 'devices'" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 font-sans">Mapear colunas identificadas para Computadores:</h4>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Mapear colunas identificadas para Computadores:</h4>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-900 p-4 rounded-lg font-sans">
                                 <div>
                                     <label class="block text-[11px] text-slate-400 mb-1 font-bold">Nome do Computador</label>
@@ -1108,7 +1075,7 @@
                                         <p class="text-xs text-slate-400 mb-4">Exporta e substitui os dados armazenados na planilha do Google pelo banco local do NetMap.</p>
                                     </div>
                                     <button @click="saveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
-                                            class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50">
+                                            class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
                                         Enviar para Google Sheets
                                     </button>
                                 </div>
@@ -1125,6 +1092,51 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- Instruções de Configuração Segura -->
+                        <div class="lg:col-span-3 bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-4 font-sans mt-2">
+                            <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
+                                <span>📋</span> Como sincronizar seus usuários e dados sem erros
+                            </h3>
+                            <p class="text-xs text-slate-300 leading-relaxed">
+                                Se os usuários que você criou localmente estão sumindo ao recarregar a página, ou se você está acessando de outros computadores e eles não aparecem, é porque o seu Google Sheets não está configurado para salvar a tabela de <strong>Usuários</strong>.
+                            </p>
+                            <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-3">
+                                <p class="text-xs font-semibold text-white">Siga estes passos para ter um banco de dados em nuvem 100% à prova de falhas:</p>
+                                <ol class="list-decimal list-inside text-xs text-slate-400 space-y-2">
+                                    <li>Abra o seu <strong class="text-white">Google Planilhas</strong> associado ao sistema.</li>
+                                    <li>No menu superior, clique em <strong class="text-white">Extensões</strong> e depois em <strong class="text-white">Apps Script</strong>.</li>
+                                    <li>Apague qualquer código que estiver lá e cole este código simplificado de alta velocidade:</li>
+                                </ol>
+                                <textarea readonly class="w-full h-48 bg-slate-950 border border-slate-850 rounded p-2.5 font-mono text-[11px] text-emerald-400 focus:outline-none" onclick="this.select()">function doGet() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var value = sheet.getRange(1, 1).getValue();
+  if (!value) {
+    return ContentService.createTextOutput(JSON.stringify({}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return ContentService.createTextOutput(value)
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var jsonStr = e.postData.contents;
+    JSON.parse(jsonStr); // Valida o formato JSON antes de salvar
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+    sheet.getRange(1, 1).setValue(jsonStr);
+    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Sincronizado com sucesso!" }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}</textarea>
+                                <p class="text-[11px] text-slate-400">
+                                    💡 <strong>Por que este código é melhor?</strong> Ele salva todo o banco de dados do NetMap (incluindo computadores, VLANs, switches, pontos e <strong>usuários com suas senhas</strong>) de forma instantânea na primeira célula (A1) da sua planilha. Isso evita falhas de colunas, dessincronizações e perda de usuários!
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -1133,7 +1145,7 @@
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-bold text-white font-sans">Controle de Acessos & Usuários</h2>
-                            <p class="text-xs text-slate-400 mt-1">Configure permissões de administradores e leitores.</p>
+                            <p class="text-xs text-slate-400 mt-1">Configure permissões de administradores e leitores do NetMap.</p>
                         </div>
                         <button @click="openUserModal()" class="bg-blue-600 hover:bg-blue-700 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
                             <span>➕</span> Novo Usuário
@@ -1146,6 +1158,7 @@
                                 <tr>
                                     <th class="p-4">Nome de Usuário</th>
                                     <th class="p-4">Nível de Permissão</th>
+                                    <th class="p-4">Senha Cadastrada</th>
                                     <th class="p-4 text-right">Ações</th>
                                 </tr>
                             </thead>
@@ -1158,13 +1171,27 @@
                                                   class="px-2.5 py-1 rounded text-xs font-bold border" 
                                                   x-text="usr.role === 'admin' ? 'Administrador' : 'Apenas Leitura'"></span>
                                         </td>
+                                        <td class="p-4 font-mono text-xs">
+                                            <div class="flex items-center gap-2">
+                                                <span x-text="showPasswordUserIds.includes(usr.id) ? usr.password : '••••••••'" class="text-slate-300 font-bold font-mono"></span>
+                                                <button @click="toggleShowPassword(usr.id)" class="text-slate-400 hover:text-white transition focus:outline-none" title="Mostrar/Ocultar Senha">
+                                                    <span x-text="showPasswordUserIds.includes(usr.id) ? '🙈' : '👁️'"></span>
+                                                </button>
+                                            </div>
+                                        </td>
                                         <td class="p-4 text-right">
-                                            <button @click="confirmDeleteUser(usr)" 
-                                                    :disabled="currentUser.id === usr.id"
-                                                    :class="currentUser.id === usr.id ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400'"
-                                                    class="text-xs px-2.5 py-1.5 rounded transition font-medium">
-                                                Excluir
-                                            </button>
+                                            <div class="flex justify-end gap-2">
+                                                <button @click="openChangePasswordModal(usr)"
+                                                        class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded transition border border-slate-700 font-semibold">
+                                                    Alterar Senha
+                                                </button>
+                                                <button @click="confirmDeleteUser(usr)" 
+                                                        :disabled="currentUser.id === usr.id"
+                                                        :class="currentUser.id === usr.id ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400 hover:bg-red-950/40'"
+                                                        class="text-xs px-2.5 py-1.5 rounded transition font-medium">
+                                                    Excluir
+                                                </button>
+                                            </div>
                                         </td>
                                     </tr>
                                 </template>
@@ -1250,6 +1277,25 @@
                 <div class="flex justify-end gap-3 pt-2 font-medium">
                     <button type="button" @click="userModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
                     <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Cadastrar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL: Alterar Senha de Usuário -->
+    <div x-show="changePasswordModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
+        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
+            <h3 class="text-lg font-bold text-white mb-1">Alterar Senha do Usuário</h3>
+            <p class="text-xs text-slate-400 mb-4" x-text="'Defina uma nova senha para o usuário: ' + changePasswordForm.username"></p>
+            <form @submit.prevent="submitChangePasswordForm()" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nova Senha</label>
+                    <input type="password" x-model="changePasswordForm.newPassword" required placeholder="Digite a nova senha..." 
+                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
+                </div>
+                <div class="flex justify-end gap-3 pt-2 font-medium">
+                    <button type="button" @click="changePasswordModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
+                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Confirmar Alteração</button>
                 </div>
             </form>
         </div>
@@ -1501,7 +1547,7 @@
     <!-- MODAL: Criar Tomada -->
     <div x-show="outletModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
-            <h3 class="text-lg font-bold text-white mb-4 font-sans">Adicionar Tomada (Ponto de Rede)</h3>
+            <h3 class="text-lg font-bold text-white mb-4">Adicionar Tomada (Ponto de Rede)</h3>
             <form @submit.prevent="submitOutletForm()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Identificação da Tomada</label>
@@ -1559,12 +1605,6 @@
     </div>
 
     <script>
-        // ==========================================
-        // CONFIGURAÇÃO CENTRAL DE DISTRIBUIÇÃO
-        // ==========================================
-        // Desta forma, todos os seus usuários sincronizarão automaticamente no carregamento inicial!
-        const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec"; 
-
         function netMapApp() {
             return {
                 // Estado da Sessão e Autenticação
@@ -1589,6 +1629,7 @@
                 switchModalOpen: false,
                 editSwitchModalOpen: false,
                 userModalOpen: false,
+                changePasswordModalOpen: false,
 
                 // Coleções Ativas de Dados
                 vlans: [],
@@ -1606,6 +1647,7 @@
                 outletForm: { name: '', location: '', status: 'Ativo' },
                 editOutletForm: { id: null, name: '', location: '', status: 'Ativo' },
                 userForm: { username: '', password: '', role: 'read' },
+                changePasswordForm: { userId: null, username: '', newPassword: '' },
 
                 // Filtros
                 deviceFilterVlan: '',
@@ -1617,14 +1659,15 @@
                 selectedSwitchId: null,
                 selectedPortNum: null,
 
+                // Controle visual de senhas de usuários
+                showPasswordUserIds: [],
+
                 // Configuração Google Sheets (Apps Script Web App)
                 gsConfig: { 
                     webAppUrl: '' 
                 },
                 gsSync: { status: 'offline', lastSynced: null },
                 autoSaveTimeout: null, // Timer de Debounce
-                isLoadingCloud: false, // Controle de sincronização assíncrona global
-                cloudSyncError: false, // Registra se houve falha na API do Sheets
 
                 // Módulos de Importação CSV
                 localImportPanel: null,
@@ -1653,22 +1696,32 @@
                     const localUsers = localStorage.getItem('netmap_users');
                     const localLogs = localStorage.getItem('netmap_logs');
 
-                    if (localVlans && localSwitches && localDevices && localOutlets && localUsers && localLogs) {
-                        this.vlans = JSON.parse(localVlans);
-                        this.switches = JSON.parse(localSwitches);
-                        this.devices = JSON.parse(localDevices);
-                        this.outlets = JSON.parse(localOutlets);
-                        this.users = JSON.parse(localUsers);
-                        this.logs = JSON.parse(localLogs);
-                    } else {
+                    // Carrega as informações locais de forma granular e segura
+                    if (localVlans) this.vlans = JSON.parse(localVlans);
+                    if (localSwitches) this.switches = JSON.parse(localSwitches);
+                    if (localDevices) this.devices = JSON.parse(localDevices);
+                    if (localOutlets) this.outlets = JSON.parse(localOutlets);
+                    if (localUsers) this.users = JSON.parse(localUsers);
+                    if (localLogs) this.logs = JSON.parse(localLogs);
+
+                    // Se o banco estiver inteiramente zerado, cria a estrutura demonstrativa original
+                    if (!localVlans && !localSwitches && !localDevices && !localOutlets && !localUsers) {
                         this.loadDefaultDemoData();
                     }
 
-                    if (!this.users || this.users.length === 0) {
+                    // Garante que a lista de usuários é válida e possui ao menos um admin
+                    if (!this.users || !Array.isArray(this.users) || this.users.length === 0) {
                         this.users = [
                             { id: 1, username: "admin", password: "admin", role: "admin" },
                             { id: 2, username: "leitor", password: "123", role: "read" }
                         ];
+                        this.saveUsers();
+                    }
+
+                    // Segurança extrema contra lockouts: Garante que o administrador padrão 'admin' sempre exista
+                    const hasAdmin = this.users.some(u => u.username && u.username.trim().toLowerCase() === 'admin');
+                    if (!hasAdmin) {
+                        this.users.unshift({ id: 1, username: "admin", password: "admin", role: "admin" });
                         this.saveUsers();
                     }
                 },
@@ -1732,7 +1785,10 @@
                 },
 
                 login() {
-                    const match = this.users.find(u => u.username.trim().toLowerCase() === this.loginForm.username.trim().toLowerCase() && u.password === this.loginForm.password);
+                    const cleanUser = this.loginForm.username.trim().toLowerCase();
+                    const cleanPass = this.loginForm.password; 
+
+                    const match = this.users.find(u => u.username && u.username.trim().toLowerCase() === cleanUser && u.password === cleanPass);
                     if (match) {
                         this.currentUser = { id: match.id, username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
@@ -1745,7 +1801,7 @@
                             this.loadFromGoogleSheets();
                         }
                     } else {
-                        this.addToast('Usuário ou senha incorretos!', 'error');
+                        this.addToast('Usuário ou senha incorretos! Atente-se a maiúsculas e minúsculas.', 'error');
                     }
                 },
 
@@ -2042,6 +2098,41 @@
                     this.userModalOpen = true;
                 },
 
+                toggleShowPassword(userId) {
+                    if (this.showPasswordUserIds.includes(userId)) {
+                        this.showPasswordUserIds = this.showPasswordUserIds.filter(id => id !== userId);
+                    } else {
+                        this.showPasswordUserIds.push(userId);
+                    }
+                },
+
+                openChangePasswordModal(usr) {
+                    this.changePasswordForm = {
+                        userId: usr.id,
+                        username: usr.username,
+                        newPassword: ''
+                    };
+                    this.changePasswordModalOpen = true;
+                },
+
+                submitChangePasswordForm() {
+                    if (this.currentUser.role === 'read') return;
+                    if (!this.changePasswordForm.newPassword || this.changePasswordForm.newPassword.trim() === '') {
+                        this.addToast('A nova senha não pode ser vazia!', 'error');
+                        return;
+                    }
+                    const usr = this.users.find(u => u.id === this.changePasswordForm.userId);
+                    if (usr) {
+                        usr.password = this.changePasswordForm.newPassword;
+                        this.users = [...this.users];
+                        this.saveUsers();
+                        this.addLog('UPDATE', `Alterou a senha do usuário ${usr.username}.`);
+                        this.addToast(`Senha do usuário ${usr.username} redefinida com sucesso!`, 'success');
+                        this.changePasswordModalOpen = false;
+                        this.autoSaveDriveCloud();
+                    }
+                },
+
                 submitVlanForm() {
                     if (this.currentUser.role === 'read') return;
                     const idInt = parseInt(this.vlanForm.id);
@@ -2129,13 +2220,14 @@
                 },
 
                 submitUserForm() {
-                    if (this.users.some(u => u.username.toLowerCase() === this.userForm.username.toLowerCase().trim())) {
+                    const cleanUsername = this.userForm.username.trim();
+                    if (this.users.some(u => u.username && u.username.toLowerCase() === cleanUsername.toLowerCase())) {
                         this.addToast('Nome de usuário já existe.', 'error');
                         return;
                     }
                     const newUser = {
                         id: Date.now(),
-                        username: this.userForm.username.trim(),
+                        username: cleanUsername,
                         password: this.userForm.password,
                         role: this.userForm.role
                     };
@@ -2281,7 +2373,6 @@
 
                 loadSampleCsv(type) {
                     if (type === 'devices') {
-                        // Exemplo robusto com vários dispositivos para demonstrar a velocidade de processamento
                         this.csvText = "Nome_Computador,IP,VLAN,Switch,Porta,Ponto\n" +
                             "PC-TESTE-01,192.168.10.9,10,SW-01,15,T-101\n" +
                             "PC-TESTE-02,192.168.20.5,20,SW-02,18,T-201\n" +
@@ -2289,7 +2380,6 @@
                             "PC-FINANC-03,192.168.10.15,10,SW-01,14,T-101";
                         this.uploadedFileName = "exemplo_computadores.csv";
                     } else if (type === 'outlets') {
-                        // Exemplo robusto com vários pontos de rede para demonstrar a velocidade de processamento
                         this.csvText = "Identificacao,Localizacao_Sala,Status\n" +
                             "T-103,Sala de Reuniões - CPD,Ativo\n" +
                             "T-104,Copa - Parede Lateral,Ativo\n" +
@@ -2403,15 +2493,6 @@
                     if (savedConfig) {
                         this.gsConfig = JSON.parse(savedConfig);
                     }
-                    
-                    // CORREÇÃO CRÍTICA:
-                    // Se não houver URL salva no localStorage do navegador do usuário,
-                    // mas existir a URL padrão definida no início do código (DEFAULT_WEB_APP_URL), carrega ela!
-                    if (!this.gsConfig.webAppUrl && typeof DEFAULT_WEB_APP_URL !== 'undefined' && DEFAULT_WEB_APP_URL.startsWith('http')) {
-                        this.gsConfig.webAppUrl = DEFAULT_WEB_APP_URL;
-                        localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
-                    }
-
                     const savedSyncState = localStorage.getItem('netmap_gs_sync');
                     if (savedSyncState) {
                         this.gsSync = JSON.parse(savedSyncState);
@@ -2434,28 +2515,21 @@
                         return;
                     }
                     this.addToast('Tentando conectar ao Google Sheets...', 'warning');
-                    this.isLoadingCloud = true;
-                    this.cloudSyncError = false;
                     try {
                         const res = await fetch(this.gsConfig.webAppUrl);
                         if (res.ok) {
+                            this.gsSync.status = 'online';
+                            this.gsSync.lastSynced = this.getCurrentTime();
+                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                            
                             const data = await res.json();
-                            if (data && typeof data === 'object' && (data.devices || data.vlans || data.users || data.outlets)) {
+                            if (data && Object.keys(data).length > 0 && (data.devices || data.vlans)) {
                                 this.applyCloudDb(data);
-                                this.gsSync.status = 'online';
-                                this.gsSync.lastSynced = this.getCurrentTime();
-                                localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
                                 this.addToast('Sincronizado! Dados recuperados do Google Sheets.', 'success');
                                 this.addLog('SYNC', 'Conexão ativa com o Google Sheets Web App.');
                             } else {
-                                // Se a planilha retornar um objeto totalmente vazio, aí sim sincronizamos o local
-                                const isEmptyDb = !data || Object.keys(data).length === 0;
-                                if (isEmptyDb) {
-                                    this.addToast('Planilha vazia detectada. Inicializando com dados locais...', 'warning');
-                                    await this.saveToGoogleSheets();
-                                } else {
-                                    throw new Error('Formato retornado inválido.');
-                                }
+                                this.addToast('Conectado! Sincronizando banco local com a planilha vazia...', 'warning');
+                                await this.saveToGoogleSheets();
                             }
                         } else {
                             throw new Error('Web App respondeu com erro.');
@@ -2463,10 +2537,7 @@
                     } catch (err) {
                         console.error(err);
                         this.gsSync.status = 'offline';
-                        this.cloudSyncError = true;
-                        this.addToast('Não foi possível conectar ao Google Sheets. Verifique a permissão do script.', 'error');
-                    } finally {
-                        this.isLoadingCloud = false;
+                        this.addToast('Não foi possível conectar ao Google Sheets. Verifique o link ou CORS.', 'error');
                     }
                 },
 
@@ -2514,47 +2585,40 @@
                 // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
                 async loadFromGoogleSheets() {
                     if (!this.gsConfig.webAppUrl) return;
-                    this.isLoadingCloud = true;
-                    this.cloudSyncError = false;
                     try {
-                        const controller = new AbortController();
-                        const timeoutId = setTimeout(() => controller.abort(), 8000); // Timeout de 8 segundos
-
-                        const response = await fetch(this.gsConfig.webAppUrl, { signal: controller.signal });
-                        clearTimeout(timeoutId);
-
+                        const response = await fetch(this.gsConfig.webAppUrl);
                         if (!response.ok) throw new Error('Não pôde baixar.');
                         const cloudDb = await response.json();
                         
-                        if (cloudDb && typeof cloudDb === 'object') {
-                            const hasData = cloudDb.devices || cloudDb.vlans || cloudDb.users || cloudDb.outlets;
-                            if (hasData) {
-                                this.applyCloudDb(cloudDb);
-                                this.gsSync.status = 'online';
-                                this.gsSync.lastSynced = this.getCurrentTime();
-                                localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-                            } else {
-                                throw new Error('Dados em formato inválido ou vazios.');
-                            }
+                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans)) {
+                            this.applyCloudDb(cloudDb);
+                            this.gsSync.status = 'online';
+                            this.gsSync.lastSynced = this.getCurrentTime();
+                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
                         }
                     } catch(e) {
-                        console.error("Falha ao obter banco remoto no boot:", e);
-                        this.cloudSyncError = true;
-                        this.gsSync.status = 'offline';
-                        this.addToast('Falha na sincronização. Verifique se o Script está publicado como Público ("Anyone").', 'error');
-                    } finally {
-                        this.isLoadingCloud = false;
+                        console.error("Falha silenciosa ao obter banco remoto no boot:", e);
                     }
                 },
 
                 applyCloudDb(cloudDb) {
                     if (!cloudDb) return;
-                    if (cloudDb.vlans) this.vlans = cloudDb.vlans;
-                    if (cloudDb.switches) this.switches = cloudDb.switches;
-                    if (cloudDb.devices) this.devices = cloudDb.devices;
-                    if (cloudDb.outlets) this.outlets = cloudDb.outlets;
-                    if (cloudDb.users) this.users = cloudDb.users;
-                    if (cloudDb.logs) this.logs = cloudDb.logs;
+                    if (cloudDb.vlans && Array.isArray(cloudDb.vlans)) this.vlans = cloudDb.vlans;
+                    if (cloudDb.switches && Array.isArray(cloudDb.switches)) this.switches = cloudDb.switches;
+                    if (cloudDb.devices && Array.isArray(cloudDb.devices)) this.devices = cloudDb.devices;
+                    if (cloudDb.outlets && Array.isArray(cloudDb.outlets)) this.outlets = cloudDb.outlets;
+                    
+                    // Valida a integridade dos usuários recebidos antes de sobrescrever os locais
+                    if (cloudDb.users && Array.isArray(cloudDb.users) && cloudDb.users.length > 0) {
+                        this.users = cloudDb.users;
+                        // Garante o admin principal
+                        const hasAdmin = this.users.some(u => u.username && u.username.trim().toLowerCase() === 'admin');
+                        if (!hasAdmin) {
+                            this.users.unshift({ id: 1, username: "admin", password: "admin", role: "admin" });
+                        }
+                    }
+                    
+                    if (cloudDb.logs && Array.isArray(cloudDb.logs)) this.logs = cloudDb.logs;
 
                     this.saveVlans();
                     this.saveSwitches();
@@ -2564,7 +2628,7 @@
                     this.saveLogs();
                 },
 
-                // Salva automaticamente com DEBOUNCE (Muito importante para evitar travamentos e limites de requisições do Google)
+                // Salva automaticamente com DEBOUNCE (Evita travamentos e sobrecarga de requisições)
                 async autoSaveDriveCloud() {
                     if (this.gsSync.status === 'online' && this.currentUser.role !== 'read') {
                         if (this.autoSaveTimeout) {
@@ -2572,7 +2636,7 @@
                         }
                         this.autoSaveTimeout = setTimeout(async () => {
                             await this.saveToGoogleSheets();
-                        }, 2000); // Aguarda 2 segundos de inatividade após qualquer alteração para sincronizar
+                        }, 2000); 
                     }
                 },
 
