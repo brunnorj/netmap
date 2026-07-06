@@ -1074,7 +1074,7 @@
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Enviar para o Sheets (Backup)</h4>
                                         <p class="text-xs text-slate-400 mb-4">Exporta e substitui os dados armazenados na planilha do Google pelo banco local do NetMap.</p>
                                     </div>
-                                    <button @click="saveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
+                                    <button @click="manualSaveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
                                             class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
                                         Enviar para Google Sheets
                                     </button>
@@ -1085,7 +1085,7 @@
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Puxar do Sheets (Restaurar)</h4>
                                         <p class="text-xs text-slate-400 mb-4">Atualiza o aplicativo local baixando a versão mais recente gravada na planilha do Google.</p>
                                     </div>
-                                    <button @click="loadFromGoogleSheets()" :disabled="!gsConfig.webAppUrl"
+                                    <button @click="manualLoadFromGoogleSheets()" :disabled="!gsConfig.webAppUrl"
                                             class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
                                         Baixar do Google Sheets
                                     </button>
@@ -1682,9 +1682,9 @@ function doPost(e) {
                     this.checkActiveSession();
                     this.restoreGoogleSheetsConfig();
                     
-                    // Se houver uma URL configurada, tenta sincronizar e baixar as atualizações ao inicializar
+                    // Se houver uma URL configurada, tenta sincronizar e unificar as atualizações ao inicializar
                     if (this.gsConfig.webAppUrl) {
-                        await this.loadFromGoogleSheets();
+                        await this.loadFromGoogleSheets(true, false); // isInitial=true, isForceOverwrite=false
                     }
                 },
 
@@ -1701,11 +1701,18 @@ function doPost(e) {
                     if (localSwitches) this.switches = JSON.parse(localSwitches);
                     if (localDevices) this.devices = JSON.parse(localDevices);
                     if (localOutlets) this.outlets = JSON.parse(localOutlets);
-                    if (localUsers) this.users = JSON.parse(localUsers);
+                    if (localUsers) {
+                        const parsed = JSON.parse(localUsers);
+                        // Garante higienização e conversão de senhas para String
+                        this.users = parsed.map(u => ({
+                            ...u,
+                            password: String(u.password).trim()
+                        }));
+                    }
                     if (localLogs) this.logs = JSON.parse(localLogs);
 
                     // Se o banco estiver inteiramente zerado, cria a estrutura demonstrativa original
-                    if (!localVlans && !localSwitches && !localDevices && !localOutlets && !localUsers) {
+                    if (!localVlans && !localSwitches && !localDevices && !localOutlets && (!localUsers || this.users.length === 0)) {
                         this.loadDefaultDemoData();
                     }
 
@@ -1788,7 +1795,23 @@ function doPost(e) {
                     const cleanUser = this.loginForm.username.trim().toLowerCase();
                     const cleanPass = this.loginForm.password; 
 
-                    const match = this.users.find(u => u.username && u.username.trim().toLowerCase() === cleanUser && u.password === cleanPass);
+                    // Diagnóstico 1: Verifica se o usuário de fato existe localmente
+                    const userExists = this.users.find(u => u.username && u.username.trim().toLowerCase() === cleanUser);
+                    if (!userExists) {
+                        this.addToast('Usuário não cadastrado ou não sincronizado neste computador!', 'error');
+                        return;
+                    }
+
+                    // Diagnóstico 2: Confere as credenciais aplicando String() e trim() nas senhas de ambos os lados
+                    const match = this.users.find(u => {
+                        if (!u || !u.username || !u.password) return false;
+                        const dbUser = String(u.username).trim().toLowerCase();
+                        const dbPass = String(u.password).trim();
+                        const inputUser = String(cleanUser).trim().toLowerCase();
+                        const inputPass = String(cleanPass).trim();
+                        return dbUser === inputUser && dbPass === inputPass;
+                    });
+
                     if (match) {
                         this.currentUser = { id: match.id, username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
@@ -1798,10 +1821,10 @@ function doPost(e) {
                         this.loginForm = { username: '', password: '' };
 
                         if (this.gsConfig.webAppUrl) {
-                            this.loadFromGoogleSheets();
+                            this.loadFromGoogleSheets(false, false);
                         }
                     } else {
-                        this.addToast('Usuário ou senha incorretos! Atente-se a maiúsculas e minúsculas.', 'error');
+                        this.addToast('Senha incorreta! Verifique maiúsculas, minúsculas ou espaços.', 'error');
                     }
                 },
 
@@ -2123,7 +2146,7 @@ function doPost(e) {
                     }
                     const usr = this.users.find(u => u.id === this.changePasswordForm.userId);
                     if (usr) {
-                        usr.password = this.changePasswordForm.newPassword;
+                        usr.password = String(this.changePasswordForm.newPassword).trim();
                         this.users = [...this.users];
                         this.saveUsers();
                         this.addLog('UPDATE', `Alterou a senha do usuário ${usr.username}.`);
@@ -2228,7 +2251,7 @@ function doPost(e) {
                     const newUser = {
                         id: Date.now(),
                         username: cleanUsername,
-                        password: this.userForm.password,
+                        password: String(this.userForm.password).trim(), // Proteção contra números puros
                         role: this.userForm.role
                     };
                     this.users.push(newUser);
@@ -2524,8 +2547,8 @@ function doPost(e) {
                             
                             const data = await res.json();
                             if (data && Object.keys(data).length > 0 && (data.devices || data.vlans)) {
-                                this.applyCloudDb(data);
-                                this.addToast('Sincronizado! Dados recuperados do Google Sheets.', 'success');
+                                this.applyCloudDb(data, false); // merge seguro padrão
+                                this.addToast('Sincronizado! Dados unificados e recuperados do Google Sheets.', 'success');
                                 this.addLog('SYNC', 'Conexão ativa com o Google Sheets Web App.');
                             } else {
                                 this.addToast('Conectado! Sincronizando banco local com a planilha vazia...', 'warning');
@@ -2568,8 +2591,6 @@ function doPost(e) {
                             this.gsSync.lastSynced = this.getCurrentTime();
                             this.gsSync.status = 'online';
                             localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-                            this.addToast('Google Sheets atualizado com sucesso!', 'success');
-                            this.addLog('SYNC', 'Sincronizou banco local com o Google Sheets Web App.');
                         } else {
                             throw new Error('Falha no upload.');
                         }
@@ -2578,40 +2599,95 @@ function doPost(e) {
                         this.gsSync.lastSynced = this.getCurrentTime();
                         this.gsSync.status = 'online';
                         localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-                        this.addToast('Dados atualizados na nuvem!', 'success');
+                    }
+                },
+
+                // WRAPPERS CONSCIENTES DE SINC MANUAL (Com alerta antes de sobrescrever)
+                async manualSaveToGoogleSheets() {
+                    if (this.currentUser.role === 'read') return;
+                    const confirm = await this.openConfirm(
+                        'Enviar para o Sheets (Backup)', 
+                        'Atenção: Isso substituirá integralmente todos os dados salvos na nuvem pelo seu banco de dados local atual. Deseja continuar?'
+                    );
+                    if (confirm) {
+                        this.addToast('Enviando dados...', 'warning');
+                        await this.saveToGoogleSheets();
+                        this.addToast('Backup concluído com sucesso!', 'success');
+                        this.addLog('SYNC', 'Sobrescrita manual executada (Backup local -> Nuvem).');
+                    }
+                },
+
+                async manualLoadFromGoogleSheets() {
+                    const confirm = await this.openConfirm(
+                        'Puxar do Sheets (Restaurar)', 
+                        'Atenção: Isso substituirá COMPLETAMENTE todos os seus computadores, VLANs, switches e usuários locais pelos dados salvos no Google Sheets. Deseja prosseguir?'
+                    );
+                    if (confirm) {
+                        this.addToast('Baixando dados...', 'warning');
+                        await this.loadFromGoogleSheets(false, true); // Força sobrescrita total local
+                        this.addToast('Restauração de nuvem concluída com sucesso!', 'success');
+                        this.addLog('SYNC', 'Restauração manual executada (Nuvem -> Local).');
                     }
                 },
 
                 // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
-                async loadFromGoogleSheets() {
+                async loadFromGoogleSheets(isInitial = false, isForceOverwrite = false) {
                     if (!this.gsConfig.webAppUrl) return;
                     try {
                         const response = await fetch(this.gsConfig.webAppUrl);
                         if (!response.ok) throw new Error('Não pôde baixar.');
                         const cloudDb = await response.json();
                         
-                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans)) {
-                            this.applyCloudDb(cloudDb);
+                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans || cloudDb.users)) {
+                            this.applyCloudDb(cloudDb, isForceOverwrite);
                             this.gsSync.status = 'online';
                             this.gsSync.lastSynced = this.getCurrentTime();
                             localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+
+                            // Se for inicial e tivermos novos usuários locais unificados, empurramos de volta para atualizar a nuvem
+                            if (isInitial && this.currentUser.role !== 'read') {
+                                await this.saveToGoogleSheets();
+                            }
                         }
                     } catch(e) {
-                        console.error("Falha silenciosa ao obter banco remoto no boot:", e);
+                        console.error("Falha ao obter banco remoto:", e);
                     }
                 },
 
-                applyCloudDb(cloudDb) {
+                applyCloudDb(cloudDb, isForceOverwrite = false) {
                     if (!cloudDb) return;
                     if (cloudDb.vlans && Array.isArray(cloudDb.vlans)) this.vlans = cloudDb.vlans;
                     if (cloudDb.switches && Array.isArray(cloudDb.switches)) this.switches = cloudDb.switches;
                     if (cloudDb.devices && Array.isArray(cloudDb.devices)) this.devices = cloudDb.devices;
                     if (cloudDb.outlets && Array.isArray(cloudDb.outlets)) this.outlets = cloudDb.outlets;
                     
-                    // Valida a integridade dos usuários recebidos antes de sobrescrever os locais
-                    if (cloudDb.users && Array.isArray(cloudDb.users) && cloudDb.users.length > 0) {
-                        this.users = cloudDb.users;
-                        // Garante o admin principal
+                    // Tratamento Inteligente de Sincronização de Usuários (Evita apagamentos em cascata)
+                    if (cloudDb.users && Array.isArray(cloudDb.users)) {
+                        const remoteUsers = cloudDb.users.map(u => ({
+                            ...u,
+                            password: String(u.password).trim() // Limpa tipo numérico vindo do Sheets
+                        }));
+
+                        if (isForceOverwrite) {
+                            // Sobrescrita manual absoluta solicitada pelo operador
+                            this.users = remoteUsers;
+                        } else {
+                            // Sincronização silenciosa (Merge de segurança anti-perda)
+                            const merged = [...this.users];
+                            remoteUsers.forEach(remote => {
+                                const localIndex = merged.findIndex(l => l.username && remote.username && l.username.trim().toLowerCase() === remote.username.trim().toLowerCase());
+                                if (localIndex === -1) {
+                                    // Novo usuário da nuvem que não temos localmente, adicionamos
+                                    merged.push(remote);
+                                } else {
+                                    // Se já temos localmente, atualizamos os dados para alinhar privilégios ou senhas novas
+                                    merged[localIndex] = { ...merged[localIndex], ...remote };
+                                }
+                            });
+                            this.users = merged;
+                        }
+
+                        // Garante sempre o admin no topo
                         const hasAdmin = this.users.some(u => u.username && u.username.trim().toLowerCase() === 'admin');
                         if (!hasAdmin) {
                             this.users.unshift({ id: 1, username: "admin", password: "admin", role: "admin" });
