@@ -80,6 +80,15 @@
                 </template>
             </div>
 
+            <!-- Indicador Visual de Sincronização em Andamento -->
+            <div x-show="isLoadingCloud" class="bg-blue-950/40 border border-blue-800/50 p-3 rounded-lg text-xs text-center text-blue-300 animate-pulse flex items-center justify-center gap-2" x-cloak>
+                <svg class="animate-spin h-4 w-4 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span>Sincronizando usuários e dados com a nuvem...</span>
+            </div>
+
             <form @submit.prevent="login()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Usuário</label>
@@ -381,7 +390,7 @@
 
                         <!-- Configuração Mapeamentos CSV -->
                         <div x-show="csvHeaders.length > 0 && localImportPanel === 'devices'" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
-                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Mapear colunas identificadas para Computadores:</h4>
+                            <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 font-sans">Mapear colunas identificadas para Computadores:</h4>
                             <div class="grid grid-cols-2 md:grid-cols-3 gap-4 bg-slate-900 p-4 rounded-lg font-sans">
                                 <div>
                                     <label class="block text-[11px] text-slate-400 mb-1 font-bold">Nome do Computador</label>
@@ -1468,7 +1477,7 @@
     <!-- MODAL: Criar Tomada -->
     <div x-show="outletModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
         <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
-            <h3 class="text-lg font-bold text-white mb-4">Adicionar Tomada (Ponto de Rede)</h3>
+            <h3 class="text-lg font-bold text-white mb-4 font-sans">Adicionar Tomada (Ponto de Rede)</h3>
             <form @submit.prevent="submitOutletForm()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Identificação da Tomada</label>
@@ -1526,6 +1535,13 @@
     </div>
 
     <script>
+        // ==========================================
+        // CONFIGURAÇÃO CENTRAL DE DISTRIBUIÇÃO
+        // ==========================================
+        // TODO: SUBSTITUA A URL ABAIXO PELA URL REAL DO SEU GOOGLE APPS SCRIPT
+        // Desta forma, todos os seus usuários sincronizarão automaticamente no carregamento inicial!
+        const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec"; 
+
         function netMapApp() {
             return {
                 // Estado da Sessão e Autenticação
@@ -1584,6 +1600,7 @@
                 },
                 gsSync: { status: 'offline', lastSynced: null },
                 autoSaveTimeout: null, // Timer de Debounce
+                isLoadingCloud: false, // Controle de sincronização assíncrona global
 
                 // Módulos de Importação CSV
                 localImportPanel: null,
@@ -2362,6 +2379,15 @@
                     if (savedConfig) {
                         this.gsConfig = JSON.parse(savedConfig);
                     }
+                    
+                    // CORREÇÃO CRÍTICA:
+                    // Se não houver URL salva no localStorage do navegador do usuário,
+                    // mas existir a URL padrão definida no início do código (DEFAULT_WEB_APP_URL), carrega ela!
+                    if (!this.gsConfig.webAppUrl && typeof DEFAULT_WEB_APP_URL !== 'undefined' && DEFAULT_WEB_APP_URL.startsWith('http')) {
+                        this.gsConfig.webAppUrl = DEFAULT_WEB_APP_URL;
+                        localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
+                    }
+
                     const savedSyncState = localStorage.getItem('netmap_gs_sync');
                     if (savedSyncState) {
                         this.gsSync = JSON.parse(savedSyncState);
@@ -2384,6 +2410,7 @@
                         return;
                     }
                     this.addToast('Tentando conectar ao Google Sheets...', 'warning');
+                    this.isLoadingCloud = true;
                     try {
                         const res = await fetch(this.gsConfig.webAppUrl);
                         if (res.ok) {
@@ -2407,6 +2434,8 @@
                         console.error(err);
                         this.gsSync.status = 'offline';
                         this.addToast('Não foi possível conectar ao Google Sheets. Verifique o link ou CORS.', 'error');
+                    } finally {
+                        this.isLoadingCloud = false;
                     }
                 },
 
@@ -2444,7 +2473,6 @@
                         }
                     } catch (err) {
                         console.error(err);
-                        // Dependendo da infraestrutura, se o navegador bloquear redirecionamento CORS mas o post completar, atualizamos o status como online
                         this.gsSync.lastSynced = this.getCurrentTime();
                         this.gsSync.status = 'online';
                         localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
@@ -2455,12 +2483,13 @@
                 // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
                 async loadFromGoogleSheets() {
                     if (!this.gsConfig.webAppUrl) return;
+                    this.isLoadingCloud = true;
                     try {
                         const response = await fetch(this.gsConfig.webAppUrl);
                         if (!response.ok) throw new Error('Não pôde baixar.');
                         const cloudDb = await response.json();
                         
-                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans)) {
+                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans || cloudDb.users)) {
                             this.applyCloudDb(cloudDb);
                             this.gsSync.status = 'online';
                             this.gsSync.lastSynced = this.getCurrentTime();
@@ -2468,6 +2497,8 @@
                         }
                     } catch(e) {
                         console.error("Falha silenciosa ao obter banco remoto no boot:", e);
+                    } finally {
+                        this.isLoadingCloud = false;
                     }
                 },
 
