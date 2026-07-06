@@ -89,6 +89,26 @@
                 <span>Sincronizando usuários e dados com a nuvem...</span>
             </div>
 
+            <!-- Alerta de Falha de Conexão com a Nuvem -->
+            <div x-show="cloudSyncError" class="bg-red-950/40 border border-red-900/50 p-3.5 rounded-lg text-xs text-red-300 space-y-1.5" x-cloak>
+                <div class="flex items-center gap-2 font-bold text-white">
+                    <span>⚠️</span> Erro de Conexão com o Google Sheets
+                </div>
+                <p class="leading-relaxed">
+                    Não foi possível carregar as credenciais mais recentes. Verifique:
+                </p>
+                <ul class="list-disc pl-4 space-y-0.5 text-[11px] text-slate-400">
+                    <li>Se o script no Google Sheets foi implantado como <strong class="text-slate-300">Web App</strong>.</li>
+                    <li>Se as configurações de acesso estão para <strong class="text-slate-300">"Anyone" (Qualquer um, inclusive anônimos)</strong>.</li>
+                    <li>Se a URL do Apps Script está correta nas configurações.</li>
+                </ul>
+                <div class="pt-1 flex gap-2">
+                    <button type="button" @click="loadFromGoogleSheets()" class="text-blue-400 hover:underline font-bold text-[11px]">Tentar Novamente 🔄</button>
+                    <span class="text-slate-700">|</span>
+                    <button type="button" @click="cloudSyncError = false" class="text-slate-400 hover:text-white font-bold text-[11px]">Entrar com conta local</button>
+                </div>
+            </div>
+
             <form @submit.prevent="login()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Usuário</label>
@@ -108,8 +128,12 @@
                     </div>
                 </div>
 
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
-                    Entrar no Sistema
+                <button type="submit" 
+                        :disabled="isLoadingCloud"
+                        :class="isLoadingCloud ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-500 text-white'"
+                        class="w-full font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
+                    <span x-show="!isLoadingCloud">Entrar no Sistema</span>
+                    <span x-show="isLoadingCloud">Aguarde Sincronização...</span>
                 </button>
             </form>
         </div>
@@ -1538,7 +1562,6 @@
         // ==========================================
         // CONFIGURAÇÃO CENTRAL DE DISTRIBUIÇÃO
         // ==========================================
-        // TODO: SUBSTITUA A URL ABAIXO PELA URL REAL DO SEU GOOGLE APPS SCRIPT
         // Desta forma, todos os seus usuários sincronizarão automaticamente no carregamento inicial!
         const DEFAULT_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec"; 
 
@@ -1601,6 +1624,7 @@
                 gsSync: { status: 'offline', lastSynced: null },
                 autoSaveTimeout: null, // Timer de Debounce
                 isLoadingCloud: false, // Controle de sincronização assíncrona global
+                cloudSyncError: false, // Registra se houve falha na API do Sheets
 
                 // Módulos de Importação CSV
                 localImportPanel: null,
@@ -2411,21 +2435,27 @@
                     }
                     this.addToast('Tentando conectar ao Google Sheets...', 'warning');
                     this.isLoadingCloud = true;
+                    this.cloudSyncError = false;
                     try {
                         const res = await fetch(this.gsConfig.webAppUrl);
                         if (res.ok) {
-                            this.gsSync.status = 'online';
-                            this.gsSync.lastSynced = this.getCurrentTime();
-                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-                            
                             const data = await res.json();
-                            if (data && Object.keys(data).length > 0 && (data.devices || data.vlans)) {
+                            if (data && typeof data === 'object' && (data.devices || data.vlans || data.users || data.outlets)) {
                                 this.applyCloudDb(data);
+                                this.gsSync.status = 'online';
+                                this.gsSync.lastSynced = this.getCurrentTime();
+                                localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
                                 this.addToast('Sincronizado! Dados recuperados do Google Sheets.', 'success');
                                 this.addLog('SYNC', 'Conexão ativa com o Google Sheets Web App.');
                             } else {
-                                this.addToast('Conectado! Sincronizando banco local com a planilha vazia...', 'warning');
-                                await this.saveToGoogleSheets();
+                                // Se a planilha retornar um objeto totalmente vazio, aí sim sincronizamos o local
+                                const isEmptyDb = !data || Object.keys(data).length === 0;
+                                if (isEmptyDb) {
+                                    this.addToast('Planilha vazia detectada. Inicializando com dados locais...', 'warning');
+                                    await this.saveToGoogleSheets();
+                                } else {
+                                    throw new Error('Formato retornado inválido.');
+                                }
                             }
                         } else {
                             throw new Error('Web App respondeu com erro.');
@@ -2433,7 +2463,8 @@
                     } catch (err) {
                         console.error(err);
                         this.gsSync.status = 'offline';
-                        this.addToast('Não foi possível conectar ao Google Sheets. Verifique o link ou CORS.', 'error');
+                        this.cloudSyncError = true;
+                        this.addToast('Não foi possível conectar ao Google Sheets. Verifique a permissão do script.', 'error');
                     } finally {
                         this.isLoadingCloud = false;
                     }
@@ -2484,19 +2515,33 @@
                 async loadFromGoogleSheets() {
                     if (!this.gsConfig.webAppUrl) return;
                     this.isLoadingCloud = true;
+                    this.cloudSyncError = false;
                     try {
-                        const response = await fetch(this.gsConfig.webAppUrl);
+                        const controller = new AbortController();
+                        const timeoutId = setTimeout(() => controller.abort(), 8000); // Timeout de 8 segundos
+
+                        const response = await fetch(this.gsConfig.webAppUrl, { signal: controller.signal });
+                        clearTimeout(timeoutId);
+
                         if (!response.ok) throw new Error('Não pôde baixar.');
                         const cloudDb = await response.json();
                         
-                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans || cloudDb.users)) {
-                            this.applyCloudDb(cloudDb);
-                            this.gsSync.status = 'online';
-                            this.gsSync.lastSynced = this.getCurrentTime();
-                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                        if (cloudDb && typeof cloudDb === 'object') {
+                            const hasData = cloudDb.devices || cloudDb.vlans || cloudDb.users || cloudDb.outlets;
+                            if (hasData) {
+                                this.applyCloudDb(cloudDb);
+                                this.gsSync.status = 'online';
+                                this.gsSync.lastSynced = this.getCurrentTime();
+                                localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                            } else {
+                                throw new Error('Dados em formato inválido ou vazios.');
+                            }
                         }
                     } catch(e) {
-                        console.error("Falha silenciosa ao obter banco remoto no boot:", e);
+                        console.error("Falha ao obter banco remoto no boot:", e);
+                        this.cloudSyncError = true;
+                        this.gsSync.status = 'offline';
+                        this.addToast('Falha na sincronização. Verifique se o Script está publicado como Público ("Anyone").', 'error');
                     } finally {
                         this.isLoadingCloud = false;
                     }
