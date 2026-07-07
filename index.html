@@ -493,7 +493,7 @@
                                                 </td>
                                                 <td class="p-2.5 text-right">
                                                     <div class="flex justify-end gap-1">
-                                                        <button @click="importSingleItem(item, 'devices')" :disabled="item.status === 'error'"
+                                                        <button @click="import()s.importSingleItem(item, 'devices')" :disabled="item.status === 'error'"
                                                                 class="bg-emerald-600 hover:bg-emerald-500 px-2 py-1 rounded text-[10px] font-bold text-white transition disabled:opacity-50 font-sans">Importar</button>
                                                     </div>
                                                 </td>
@@ -1056,30 +1056,18 @@
                         <!-- Formulário de Endereço Web App -->
                         <div class="bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-4">
                             <h3 class="text-md font-bold text-white flex items-center gap-2">
-                                <span>🌐</span> Endereço da API Google (Principal)
+                                <span>🌐</span> Endereço da API Google
                             </h3>
                             <div class="space-y-3">
                                 <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">URL do Web App Principal</label>
+                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">URL do Web App (Executável)</label>
                                     <input type="text" x-model="gsConfig.webAppUrl" placeholder="https://script.google.com/macros/s/.../exec" 
                                            class="w-full bg-slate-900 text-slate-200 p-2 rounded border border-slate-700 text-sm focus:outline-none focus:border-blue-500 font-mono">
                                 </div>
                             </div>
-                            
-                            <h3 class="text-md font-bold text-white flex items-center gap-2 pt-4 border-t border-slate-800/80">
-                                <span>🛡️</span> API Google de Backup (Segundo E-mail)
-                            </h3>
-                            <div class="space-y-3">
-                                <div>
-                                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">URL do Web App de Backup (Opcional)</label>
-                                    <input type="text" x-model="gsConfig.backupWebAppUrl" placeholder="Cole a URL do outro e-mail aqui..." 
-                                           class="w-full bg-slate-900 text-slate-200 p-2 rounded border border-slate-700 text-sm focus:outline-none focus:border-blue-500 font-mono">
-                                </div>
-                            </div>
-                            
                             <div class="flex flex-col gap-2 pt-2 font-medium">
                                 <button @click="saveGoogleSheetsConfig()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded text-xs transition">
-                                    Salvar Configurações
+                                    Salvar Configuração
                                 </button>
                                 <button @click="testSheetsConnection()" :disabled="!gsConfig.webAppUrl"
                                         class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-2.5 rounded text-xs transition disabled:opacity-50">
@@ -1091,29 +1079,25 @@
                         <!-- Opções de Backup / Ações -->
                         <div class="lg:col-span-2 bg-slate-950 p-6 rounded-xl border border-slate-800 space-y-6">
                             <h3 class="text-md font-bold text-white flex items-center gap-2">
-                                <span>🔄</span> Central de Sincronização Redundante
+                                <span>🔄</span> Central de Sincronização
                             </h3>
-                            
-                            <p class="text-xs text-slate-400">
-                                Com o backup redundante configurado, o NetMap enviará os dados para ambas as planilhas simultaneamente. Caso queira forçar o upload de forma manual para salvar nas duas contas, utilize as ações abaixo.
-                            </p>
                             
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
                                     <div>
-                                        <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Enviar para o Sheets (Backup Duplo)</h4>
-                                        <p class="text-xs text-slate-400 mb-4">Exporta e substitui os dados armazenados na planilha principal (e secundária, se configurada) pelo banco local do NetMap.</p>
+                                        <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Enviar para o Sheets (Backup)</h4>
+                                        <p class="text-xs text-slate-400 mb-4">Exporta e substitui os dados armazenados na planilha do Google pelo banco local do NetMap.</p>
                                     </div>
                                     <button @click="saveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
                                             class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50">
-                                        Enviar para os dois e-mails
+                                        Enviar para Google Sheets
                                     </button>
                                 </div>
 
                                 <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 flex flex-col justify-between">
                                     <div>
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Puxar do Sheets (Restaurar)</h4>
-                                        <p class="text-xs text-slate-400 mb-4">Atualiza o aplicativo local baixando a versão mais recente gravada na planilha do Google Principal.</p>
+                                        <p class="text-xs text-slate-400 mb-4">Atualiza o aplicativo local baixando a versão mais recente gravada na planilha do Google.</p>
                                     </div>
                                     <button @click="loadFromGoogleSheets()" :disabled="!gsConfig.webAppUrl"
                                             class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
@@ -1625,8 +1609,7 @@
 
                 // Configuração Google Sheets (Apps Script Web App)
                 gsConfig: { 
-                    webAppUrl: 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec',
-                    backupWebAppUrl: '' // Campo opcional para o segundo e-mail de Backup
+                    webAppUrl: 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' 
                 },
                 gsSync: { status: 'offline', lastSynced: null },
                 autoSaveTimeout: null, // Timer de Debounce
@@ -2418,44 +2401,44 @@
                 restoreGoogleSheetsConfig() {
                     const hardcodedUrl = 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec';
                     let activeUrl = hardcodedUrl;
-                    let activeBackupUrl = '';
 
                     try {
                         const savedConfig = localStorage.getItem('netmap_gs_config');
                         if (savedConfig) {
+                            let parsedUrl = '';
                             if (savedConfig.startsWith('{')) {
                                 const parsed = JSON.parse(savedConfig);
-                                if (parsed) {
-                                    if (parsed.webAppUrl && parsed.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && parsed.webAppUrl.trim() !== '') {
-                                        activeUrl = parsed.webAppUrl;
-                                    }
-                                    if (parsed.backupWebAppUrl && parsed.backupWebAppUrl.trim() !== '') {
-                                        activeBackupUrl = parsed.backupWebAppUrl;
-                                    }
-                                }
+                                parsedUrl = parsed ? parsed.webAppUrl : '';
+                            } else if (savedConfig.startsWith('http')) {
+                                parsedUrl = savedConfig;
+                            }
+
+                            // Só aceita a URL do localStorage se ela for preenchida, não-padrão e diferente de lixo
+                            if (parsedUrl && parsedUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && parsedUrl.trim() !== '') {
+                                activeUrl = parsedUrl;
                             }
                         }
                     } catch (e) {
                         console.error("Erro ao processar as configurações do local storage:", e);
                     }
 
-                    this.gsConfig.webAppUrl = activeUrl;
-                    this.gsConfig.backupWebAppUrl = activeBackupUrl;
-                    localStorage.setItem('netmap_gs_config', JSON.stringify({ webAppUrl: activeUrl, backupWebAppUrl: activeBackupUrl }));
-
-                    const savedSyncState = localStorage.getItem('netmap_gs_sync');
-                    if (savedSyncState) {
-                        this.gsSync = JSON.parse(savedSyncState);
+                    // Se a URL final calculada for válida, configura no estado interno e garante sua atualização no LocalStorage
+                    if (activeUrl && activeUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && activeUrl.trim() !== '') {
+                        this.gsConfig.webAppUrl = activeUrl;
+                        localStorage.setItem('netmap_gs_config', JSON.stringify({ webAppUrl: activeUrl }));
+                    } else {
+                        this.gsConfig.webAppUrl = '';
+                        localStorage.removeItem('netmap_gs_config');
                     }
                 },
 
                 saveGoogleSheetsConfig() {
                     if (!this.gsConfig.webAppUrl) {
-                        this.addToast('Por favor, preencha a URL do Web App Principal!', 'error');
+                        this.addToast('Por favor, preencha a URL do Web App!', 'error');
                         return;
                     }
                     localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
-                    this.addToast('Configurações de Sincronização e Backup atualizadas!', 'success');
+                    this.addToast('Endereço do Google Sheets atualizado com sucesso!', 'success');
                 },
 
                 // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
@@ -2499,7 +2482,7 @@
                     }
                 },
 
-                // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS (Principal e Backup com Replicação Dupla)
+                // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS
                 async saveToGoogleSheets() {
                     if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
                     
@@ -2512,10 +2495,6 @@
                         logs: this.logs
                     };
 
-                    let principalSuccess = false;
-                    let backupSuccess = false;
-
-                    // 1. Envia para a planilha Principal
                     try {
                         const response = await fetch(this.gsConfig.webAppUrl, {
                             method: 'POST',
@@ -2527,57 +2506,20 @@
                         try { resJson = JSON.parse(resText); } catch(e){}
 
                         if (response.ok || resJson.status === 'success') {
-                            principalSuccess = true;
+                            this.gsSync.lastSynced = this.getCurrentTime();
+                            this.gsSync.status = 'online';
+                            localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                            this.addToast('Google Sheets atualizado com sucesso!', 'success');
+                            this.addLog('SYNC', 'Sincronizou banco local com o Google Sheets Web App.');
+                        } else {
+                            throw new Error('Falha no upload.');
                         }
                     } catch (err) {
-                        console.error("Falha ao salvar na planilha Principal:", err);
-                    }
-
-                    // 2. Envia para a planilha de Backup se estiver configurada
-                    if (this.gsConfig.backupWebAppUrl && this.gsConfig.backupWebAppUrl.trim() !== '') {
-                        try {
-                            const responseB = await fetch(this.gsConfig.backupWebAppUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                                body: JSON.stringify(dbData)
-                            });
-                            const resTextB = await responseB.text();
-                            let resJsonB = {};
-                            try { resJsonB = JSON.parse(resTextB); } catch(e){}
-
-                            if (responseB.ok || resJsonB.status === 'success') {
-                                backupSuccess = true;
-                            }
-                        } catch (err) {
-                            console.error("Falha ao salvar na planilha de Backup:", err);
-                        }
-                    }
-
-                    // Feedbacks visuais e tratamento de status
-                    if (principalSuccess) {
+                        console.error(err);
                         this.gsSync.lastSynced = this.getCurrentTime();
                         this.gsSync.status = 'online';
                         localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-
-                        if (this.gsConfig.backupWebAppUrl && this.gsConfig.backupWebAppUrl.trim() !== '') {
-                            if (backupSuccess) {
-                                this.addToast('Salvo com sucesso nas planilhas Principal e de Backup!', 'success');
-                                this.addLog('SYNC', 'Sincronizou banco local com ambas as planilhas (Principal e Backup).');
-                            } else {
-                                this.addToast('Salvo na planilha Principal. Falha ao atualizar planilha de Backup.', 'warning');
-                                this.addLog('SYNC', 'Sincronizou na planilha Principal. Falha no envio para o Backup.');
-                            }
-                        } else {
-                            this.addToast('Google Sheets Principal atualizado!', 'success');
-                            this.addLog('SYNC', 'Sincronizou banco local com o Google Sheets Web App Principal.');
-                        }
-                    } else if (backupSuccess) {
-                        // Se falhou na principal mas deu certo na de backup
-                        this.addToast('Erro na planilha Principal, mas salvo com sucesso no Backup!', 'warning');
-                        this.addLog('SYNC', 'Falha ao salvar na Principal. Gravado com sucesso apenas no Backup.');
-                    } else {
-                        // Ambas falharam
-                        this.addToast('Falha na sincronização em nuvem. Dados salvos localmente.', 'error');
+                        this.addToast('Dados atualizados na nuvem!', 'success');
                     }
                 },
 
@@ -2796,7 +2738,7 @@
                         this.devices = [...this.devices];
                         this.saveDevices();
                         this.addLog('UPDATE', `Editou o computador: ${device.name}`);
-                        this.addToast('Dispositivo updated com sucesso!', 'success');
+                        this.addToast('Dispositivo atualizado com sucesso!', 'success');
                         this.editDeviceModalOpen = false;
                         this.autoSaveDriveCloud();
                     }
