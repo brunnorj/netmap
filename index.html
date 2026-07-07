@@ -85,7 +85,7 @@
                     </template>
                 </div>
                 
-                <template x-if="gsConfig.webAppUrl && gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec'">
+                <template x-if="gsConfig.webAppUrl && gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI'">
                     <div class="flex justify-between items-center pt-1.5 border-t border-slate-900">
                         <span class="text-[10px] text-slate-400 truncate max-w-[200px]" x-text="'URL: ' + gsConfig.webAppUrl"></span>
                         <button type="button" @click="testSheetsConnection()" class="text-blue-400 font-semibold hover:underline" :disabled="loginLoading">Sincronizar</button>
@@ -1623,7 +1623,7 @@
                     this.checkActiveSession();
                     
                     // IMPORTANTE: Busca a base do Sheets imediatamente antes do Login se houver uma URL ativa
-                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') {
+                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
                         this.loginLoading = true;
                         await this.loadFromGoogleSheets();
                         this.loginLoading = false;
@@ -1736,7 +1736,7 @@
                         this.addToast('Bem-vindo ao NetMap PRO!', 'success');
                         this.loginForm = { username: '', password: '' };
 
-                        if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') {
+                        if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
                             this.loadFromGoogleSheets();
                         }
                     } else {
@@ -2409,7 +2409,7 @@
                             }
 
                             // Só aceita a URL do localStorage se ela for preenchida, não-padrão e diferente de lixo
-                            if (parsedUrl && parsedUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && parsedUrl.trim() !== '') {
+                            if (parsedUrl && parsedUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && parsedUrl.trim() !== '') {
                                 activeUrl = parsedUrl;
                             }
                         }
@@ -2418,7 +2418,7 @@
                     }
 
                     // Se a URL final calculada for válida, configura no estado interno e garante sua atualização no LocalStorage
-                    if (activeUrl && activeUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && activeUrl.trim() !== '') {
+                    if (activeUrl && activeUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && activeUrl.trim() !== '') {
                         this.gsConfig.webAppUrl = activeUrl;
                         localStorage.setItem('netmap_gs_config', JSON.stringify({ webAppUrl: activeUrl }));
                     } else {
@@ -2438,7 +2438,7 @@
 
                 // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
                 async testSheetsConnection() {
-                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') {
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
                         this.addToast('Defina a URL do seu Web App nas configurações!', 'error');
                         return;
                     }
@@ -2450,7 +2450,15 @@
                             this.gsSync.lastSynced = this.getCurrentTime();
                             localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
                             
-                            const data = await res.json();
+                            const responseText = await res.text();
+                            let data;
+                            try {
+                                data = JSON.parse(responseText);
+                            } catch (e) {
+                                this.addToast('O Google Sheets retornou dados inválidos. Verifique as permissões de acesso do script.', 'error');
+                                return;
+                            }
+
                             if (data && Object.keys(data).length > 0 && (data.devices || data.vlans)) {
                                 this.applyCloudDb(data);
                                 this.addToast('Sincronizado! Dados recuperados do Google Sheets.', 'success');
@@ -2471,7 +2479,7 @@
 
                 // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS
                 async saveToGoogleSheets() {
-                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') return;
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
                     
                     const dbData = {
                         vlans: this.vlans,
@@ -2512,13 +2520,22 @@
 
                 // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
                 async loadFromGoogleSheets() {
-                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') return;
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
                     try {
                         const response = await fetch(this.gsConfig.webAppUrl);
                         if (!response.ok) throw new Error('Não pôde baixar.');
-                        const cloudDb = await response.json();
                         
-                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans)) {
+                        const responseText = await response.text();
+                        let cloudDb;
+                        try {
+                            cloudDb = JSON.parse(responseText);
+                        } catch (jsonError) {
+                            console.error("Erro ao analisar o JSON do Google Sheets:", jsonError);
+                            this.addToast('Atenção: A planilha retornou um formato inválido de dados.', 'warning');
+                            return;
+                        }
+                        
+                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans || cloudDb.users)) {
                             this.applyCloudDb(cloudDb);
                             this.gsSync.status = 'online';
                             this.gsSync.lastSynced = this.getCurrentTime();
@@ -2593,7 +2610,7 @@
                         }
                     }
 
-                    // 2. Validação de IP duplicado
+                    // 2. Validation de IP duplicado
                     if (this.deviceForm.ip && this.deviceForm.ip.trim() !== '') {
                         const ipRegex = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
                         if (!ipRegex.test(this.deviceForm.ip.trim())) {
