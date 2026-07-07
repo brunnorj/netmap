@@ -85,7 +85,7 @@
                     </template>
                 </div>
                 
-                <template x-if="gsConfig.webAppUrl && gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI'">
+                <template x-if="gsConfig.webAppUrl && gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec'">
                     <div class="flex justify-between items-center pt-1.5 border-t border-slate-900">
                         <span class="text-[10px] text-slate-400 truncate max-w-[200px]" x-text="'URL: ' + gsConfig.webAppUrl"></span>
                         <button type="button" @click="testSheetsConnection()" class="text-blue-400 font-semibold hover:underline" :disabled="loginLoading">Sincronizar</button>
@@ -1623,7 +1623,7 @@
                     this.checkActiveSession();
                     
                     // IMPORTANTE: Busca a base do Sheets imediatamente antes do Login se houver uma URL ativa
-                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
+                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') {
                         this.loginLoading = true;
                         await this.loadFromGoogleSheets();
                         this.loginLoading = false;
@@ -1736,7 +1736,7 @@
                         this.addToast('Bem-vindo ao NetMap PRO!', 'success');
                         this.loginForm = { username: '', password: '' };
 
-                        if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
+                        if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') {
                             this.loadFromGoogleSheets();
                         }
                     } else {
@@ -2398,13 +2398,13 @@
                     if (savedConfig) {
                         const parsed = JSON.parse(savedConfig);
                         // Correção para ignorar lixo de cache/localstorage antigo e priorizar a URL válida definida diretamente no código
-                        if (parsed && parsed.webAppUrl && parsed.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && parsed.webAppUrl.trim() !== '') {
+                        if (parsed && parsed.webAppUrl && parsed.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && parsed.webAppUrl.trim() !== '') {
                             this.gsConfig.webAppUrl = parsed.webAppUrl;
                         }
                     }
 
                     // Se a URL definida no código for válida, força a atualização no LocalStorage para sincronizar o navegador de todos
-                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && this.gsConfig.webAppUrl.trim() !== '') {
+                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && this.gsConfig.webAppUrl.trim() !== '') {
                         localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
                     }
 
@@ -2425,7 +2425,7 @@
 
                 // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
                 async testSheetsConnection() {
-                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') {
                         this.addToast('Defina a URL do seu Web App nas configurações!', 'error');
                         return;
                     }
@@ -2458,7 +2458,7 @@
 
                 // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS
                 async saveToGoogleSheets() {
-                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') return;
                     
                     const dbData = {
                         vlans: this.vlans,
@@ -2499,7 +2499,7 @@
 
                 // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
                 async loadFromGoogleSheets() {
-                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec') return;
                     try {
                         const response = await fetch(this.gsConfig.webAppUrl);
                         if (!response.ok) throw new Error('Não pôde baixar.');
