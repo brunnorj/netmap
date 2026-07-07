@@ -72,7 +72,7 @@
                           x-text="gsSync.status === 'online' ? '✓ Google Sheets Conectado' : 'Aguardando Sincronização'"></span>
                 </div>
                 
-                <template x-if="gsConfig.webAppUrl">
+                <template x-if="gsConfig.webAppUrl && gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI'">
                     <div class="flex justify-between items-center pt-1.5 border-t border-slate-900">
                         <span class="text-[10px] text-slate-400 truncate max-w-[200px]" x-text="'URL: ' + gsConfig.webAppUrl"></span>
                         <button type="button" @click="testSheetsConnection()" class="text-blue-400 font-semibold hover:underline">Sincronizar</button>
@@ -1074,8 +1074,8 @@
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-blue-400 mb-1">Enviar para o Sheets (Backup)</h4>
                                         <p class="text-xs text-slate-400 mb-4">Exporta e substitui os dados armazenados na planilha do Google pelo banco local do NetMap.</p>
                                     </div>
-                                    <button @click="manualSaveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
-                                            class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
+                                    <button @click="saveToGoogleSheets()" :disabled="!gsConfig.webAppUrl || currentUser.role === 'read'"
+                                            class="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded text-xs transition disabled:opacity-50">
                                         Enviar para Google Sheets
                                     </button>
                                 </div>
@@ -1085,56 +1085,11 @@
                                         <h4 class="text-xs font-bold uppercase tracking-wider text-emerald-400 mb-1">Puxar do Sheets (Restaurar)</h4>
                                         <p class="text-xs text-slate-400 mb-4">Atualiza o aplicativo local baixando a versão mais recente gravada na planilha do Google.</p>
                                     </div>
-                                    <button @click="manualLoadFromGoogleSheets()" :disabled="!gsConfig.webAppUrl"
+                                    <button @click="loadFromGoogleSheets()" :disabled="!gsConfig.webAppUrl"
                                             class="w-full py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded text-xs transition disabled:opacity-50 font-medium">
                                         Baixar do Google Sheets
                                     </button>
                                 </div>
-                            </div>
-                        </div>
-
-                        <!-- Instruções de Configuração Segura -->
-                        <div class="lg:col-span-3 bg-slate-950 p-6 rounded-xl border border-blue-900/40 space-y-4 font-sans mt-2">
-                            <h3 class="text-md font-bold text-blue-400 flex items-center gap-2">
-                                <span>📋</span> Como sincronizar seus usuários e dados sem erros
-                            </h3>
-                            <p class="text-xs text-slate-300 leading-relaxed">
-                                Se os usuários que você criou localmente estão sumindo ao recarregar a página, ou se você está acessando de outros computadores e eles não aparecem, é porque o seu Google Sheets não está configurado para salvar a tabela de <strong>Usuários</strong>.
-                            </p>
-                            <div class="bg-slate-900 p-4 rounded-lg border border-slate-800 space-y-3">
-                                <p class="text-xs font-semibold text-white">Siga estes passos para ter um banco de dados em nuvem 100% à prova de falhas:</p>
-                                <ol class="list-decimal list-inside text-xs text-slate-400 space-y-2">
-                                    <li>Abra o seu <strong class="text-white">Google Planilhas</strong> associado ao sistema.</li>
-                                    <li>No menu superior, clique em <strong class="text-white">Extensões</strong> e depois em <strong class="text-white">Apps Script</strong>.</li>
-                                    <li>Apague qualquer código que estiver lá e cole este código simplificado de alta velocidade:</li>
-                                </ol>
-                                <textarea readonly class="w-full h-48 bg-slate-950 border border-slate-850 rounded p-2.5 font-mono text-[11px] text-emerald-400 focus:outline-none" onclick="this.select()">function doGet() {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-  var value = sheet.getRange(1, 1).getValue();
-  if (!value) {
-    return ContentService.createTextOutput(JSON.stringify({}))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-  return ContentService.createTextOutput(value)
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-function doPost(e) {
-  try {
-    var jsonStr = e.postData.contents;
-    JSON.parse(jsonStr); // Valida o formato JSON antes de salvar
-    var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
-    sheet.getRange(1, 1).setValue(jsonStr);
-    return ContentService.createTextOutput(JSON.stringify({ status: "success", message: "Sincronizado com sucesso!" }))
-      .setMimeType(ContentService.MimeType.JSON);
-  } catch(err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}</textarea>
-                                <p class="text-[11px] text-slate-400">
-                                    💡 <strong>Por que este código é melhor?</strong> Ele salva todo o banco de dados do NetMap (incluindo computadores, VLANs, switches, pontos e <strong>usuários com suas senhas</strong>) de forma instantânea na primeira célula (A1) da sua planilha. Isso evita falhas de colunas, dessincronizações e perda de usuários!
-                                </p>
                             </div>
                         </div>
                     </div>
@@ -1145,7 +1100,7 @@ function doPost(e) {
                     <div class="flex justify-between items-center">
                         <div>
                             <h2 class="text-2xl font-bold text-white font-sans">Controle de Acessos & Usuários</h2>
-                            <p class="text-xs text-slate-400 mt-1">Configure permissões de administradores e leitores do NetMap.</p>
+                            <p class="text-xs text-slate-400 mt-1">Configure permissões de administradores e leitores.</p>
                         </div>
                         <button @click="openUserModal()" class="bg-blue-600 hover:bg-blue-700 flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition text-white">
                             <span>➕</span> Novo Usuário
@@ -1158,7 +1113,6 @@ function doPost(e) {
                                 <tr>
                                     <th class="p-4">Nome de Usuário</th>
                                     <th class="p-4">Nível de Permissão</th>
-                                    <th class="p-4">Senha Cadastrada</th>
                                     <th class="p-4 text-right">Ações</th>
                                 </tr>
                             </thead>
@@ -1171,27 +1125,13 @@ function doPost(e) {
                                                   class="px-2.5 py-1 rounded text-xs font-bold border" 
                                                   x-text="usr.role === 'admin' ? 'Administrador' : 'Apenas Leitura'"></span>
                                         </td>
-                                        <td class="p-4 font-mono text-xs">
-                                            <div class="flex items-center gap-2">
-                                                <span x-text="showPasswordUserIds.includes(usr.id) ? usr.password : '••••••••'" class="text-slate-300 font-bold font-mono"></span>
-                                                <button @click="toggleShowPassword(usr.id)" class="text-slate-400 hover:text-white transition focus:outline-none" title="Mostrar/Ocultar Senha">
-                                                    <span x-text="showPasswordUserIds.includes(usr.id) ? '🙈' : '👁️'"></span>
-                                                </button>
-                                            </div>
-                                        </td>
                                         <td class="p-4 text-right">
-                                            <div class="flex justify-end gap-2">
-                                                <button @click="openChangePasswordModal(usr)"
-                                                        class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded transition border border-slate-700 font-semibold">
-                                                    Alterar Senha
-                                                </button>
-                                                <button @click="confirmDeleteUser(usr)" 
-                                                        :disabled="currentUser.id === usr.id"
-                                                        :class="currentUser.id === usr.id ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400 hover:bg-red-950/40'"
-                                                        class="text-xs px-2.5 py-1.5 rounded transition font-medium">
-                                                    Excluir
-                                                </button>
-                                            </div>
+                                            <button @click="confirmDeleteUser(usr)" 
+                                                    :disabled="currentUser.id === usr.id"
+                                                    :class="currentUser.id === usr.id ? 'opacity-30 cursor-not-allowed text-slate-600' : 'text-red-500 hover:text-red-400'"
+                                                    class="text-xs px-2.5 py-1.5 rounded transition font-medium">
+                                                Excluir
+                                            </button>
                                         </td>
                                     </tr>
                                 </template>
@@ -1277,25 +1217,6 @@ function doPost(e) {
                 <div class="flex justify-end gap-3 pt-2 font-medium">
                     <button type="button" @click="userModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
                     <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Cadastrar</button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <!-- MODAL: Alterar Senha de Usuário -->
-    <div x-show="changePasswordModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4" x-cloak>
-        <div class="bg-slate-900 border border-slate-800 rounded-xl max-w-md w-full p-6 shadow-2xl relative animate-fade-in font-sans">
-            <h3 class="text-lg font-bold text-white mb-1">Alterar Senha do Usuário</h3>
-            <p class="text-xs text-slate-400 mb-4" x-text="'Defina uma nova senha para o usuário: ' + changePasswordForm.username"></p>
-            <form @submit.prevent="submitChangePasswordForm()" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Nova Senha</label>
-                    <input type="password" x-model="changePasswordForm.newPassword" required placeholder="Digite a nova senha..." 
-                           class="w-full bg-slate-950 text-white rounded p-2 text-sm border border-slate-800 focus:outline-none focus:border-blue-500">
-                </div>
-                <div class="flex justify-end gap-3 pt-2 font-medium">
-                    <button type="button" @click="changePasswordModalOpen = false" class="bg-slate-800 text-slate-300 px-4 py-2 rounded text-sm transition">Cancelar</button>
-                    <button type="submit" class="bg-blue-600 text-white px-5 py-2 rounded text-sm font-semibold hover:bg-blue-500 transition">Confirmar Alteração</button>
                 </div>
             </form>
         </div>
@@ -1629,7 +1550,6 @@ function doPost(e) {
                 switchModalOpen: false,
                 editSwitchModalOpen: false,
                 userModalOpen: false,
-                changePasswordModalOpen: false,
 
                 // Coleções Ativas de Dados
                 vlans: [],
@@ -1647,7 +1567,6 @@ function doPost(e) {
                 outletForm: { name: '', location: '', status: 'Ativo' },
                 editOutletForm: { id: null, name: '', location: '', status: 'Ativo' },
                 userForm: { username: '', password: '', role: 'read' },
-                changePasswordForm: { userId: null, username: '', newPassword: '' },
 
                 // Filtros
                 deviceFilterVlan: '',
@@ -1659,12 +1578,10 @@ function doPost(e) {
                 selectedSwitchId: null,
                 selectedPortNum: null,
 
-                // Controle visual de senhas de usuários
-                showPasswordUserIds: [],
-
                 // Configuração Google Sheets (Apps Script Web App)
                 gsConfig: { 
-                    webAppUrl: '' 
+                    // ATENÇÃO: Substitua 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' abaixo pelo link do seu Google Apps Script!
+                    webAppUrl: 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' 
                 },
                 gsSync: { status: 'offline', lastSynced: null },
                 autoSaveTimeout: null, // Timer de Debounce
@@ -1679,12 +1596,12 @@ function doPost(e) {
 
                 async initSystem() {
                     this.restoreLocalDatabase();
+                    this.restoreGoogleSheetsConfig(); // Restaura mantendo a padrão caso não haja local
                     this.checkActiveSession();
-                    this.restoreGoogleSheetsConfig();
                     
-                    // Se houver uma URL configurada, tenta sincronizar e unificar as atualizações ao inicializar
-                    if (this.gsConfig.webAppUrl) {
-                        await this.loadFromGoogleSheets(true, false); // isInitial=true, isForceOverwrite=false
+                    // IMPORTANTE: Busca a base do Sheets imediatamente antes do Login se houver uma URL ativa
+                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
+                        await this.loadFromGoogleSheets();
                     }
                 },
 
@@ -1696,39 +1613,22 @@ function doPost(e) {
                     const localUsers = localStorage.getItem('netmap_users');
                     const localLogs = localStorage.getItem('netmap_logs');
 
-                    // Carrega as informações locais de forma granular e segura
-                    if (localVlans) this.vlans = JSON.parse(localVlans);
-                    if (localSwitches) this.switches = JSON.parse(localSwitches);
-                    if (localDevices) this.devices = JSON.parse(localDevices);
-                    if (localOutlets) this.outlets = JSON.parse(localOutlets);
-                    if (localUsers) {
-                        const parsed = JSON.parse(localUsers);
-                        // Garante higienização e conversão de senhas para String
-                        this.users = parsed.map(u => ({
-                            ...u,
-                            password: String(u.password).trim()
-                        }));
-                    }
-                    if (localLogs) this.logs = JSON.parse(localLogs);
-
-                    // Se o banco estiver inteiramente zerado, cria a estrutura demonstrativa original
-                    if (!localVlans && !localSwitches && !localDevices && !localOutlets && (!localUsers || this.users.length === 0)) {
+                    if (localVlans && localSwitches && localDevices && localOutlets && localUsers && localLogs) {
+                        this.vlans = JSON.parse(localVlans);
+                        this.switches = JSON.parse(localSwitches);
+                        this.devices = JSON.parse(localDevices);
+                        this.outlets = JSON.parse(localOutlets);
+                        this.users = JSON.parse(localUsers);
+                        this.logs = JSON.parse(localLogs);
+                    } else {
                         this.loadDefaultDemoData();
                     }
 
-                    // Garante que a lista de usuários é válida e possui ao menos um admin
-                    if (!this.users || !Array.isArray(this.users) || this.users.length === 0) {
+                    if (!this.users || this.users.length === 0) {
                         this.users = [
                             { id: 1, username: "admin", password: "admin", role: "admin" },
                             { id: 2, username: "leitor", password: "123", role: "read" }
                         ];
-                        this.saveUsers();
-                    }
-
-                    // Segurança extrema contra lockouts: Garante que o administrador padrão 'admin' sempre exista
-                    const hasAdmin = this.users.some(u => u.username && u.username.trim().toLowerCase() === 'admin');
-                    if (!hasAdmin) {
-                        this.users.unshift({ id: 1, username: "admin", password: "admin", role: "admin" });
                         this.saveUsers();
                     }
                 },
@@ -1792,26 +1692,7 @@ function doPost(e) {
                 },
 
                 login() {
-                    const cleanUser = this.loginForm.username.trim().toLowerCase();
-                    const cleanPass = this.loginForm.password; 
-
-                    // Diagnóstico 1: Verifica se o usuário de fato existe localmente
-                    const userExists = this.users.find(u => u.username && u.username.trim().toLowerCase() === cleanUser);
-                    if (!userExists) {
-                        this.addToast('Usuário não cadastrado ou não sincronizado neste computador!', 'error');
-                        return;
-                    }
-
-                    // Diagnóstico 2: Confere as credenciais aplicando String() e trim() nas senhas de ambos os lados
-                    const match = this.users.find(u => {
-                        if (!u || !u.username || !u.password) return false;
-                        const dbUser = String(u.username).trim().toLowerCase();
-                        const dbPass = String(u.password).trim();
-                        const inputUser = String(cleanUser).trim().toLowerCase();
-                        const inputPass = String(cleanPass).trim();
-                        return dbUser === inputUser && dbPass === inputPass;
-                    });
-
+                    const match = this.users.find(u => u.username.trim().toLowerCase() === this.loginForm.username.trim().toLowerCase() && u.password === this.loginForm.password);
                     if (match) {
                         this.currentUser = { id: match.id, username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
@@ -1820,11 +1701,11 @@ function doPost(e) {
                         this.addToast('Bem-vindo ao NetMap PRO!', 'success');
                         this.loginForm = { username: '', password: '' };
 
-                        if (this.gsConfig.webAppUrl) {
-                            this.loadFromGoogleSheets(false, false);
+                        if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
+                            this.loadFromGoogleSheets();
                         }
                     } else {
-                        this.addToast('Senha incorreta! Verifique maiúsculas, minúsculas ou espaços.', 'error');
+                        this.addToast('Usuário ou senha incorretos!', 'error');
                     }
                 },
 
@@ -2121,41 +2002,6 @@ function doPost(e) {
                     this.userModalOpen = true;
                 },
 
-                toggleShowPassword(userId) {
-                    if (this.showPasswordUserIds.includes(userId)) {
-                        this.showPasswordUserIds = this.showPasswordUserIds.filter(id => id !== userId);
-                    } else {
-                        this.showPasswordUserIds.push(userId);
-                    }
-                },
-
-                openChangePasswordModal(usr) {
-                    this.changePasswordForm = {
-                        userId: usr.id,
-                        username: usr.username,
-                        newPassword: ''
-                    };
-                    this.changePasswordModalOpen = true;
-                },
-
-                submitChangePasswordForm() {
-                    if (this.currentUser.role === 'read') return;
-                    if (!this.changePasswordForm.newPassword || this.changePasswordForm.newPassword.trim() === '') {
-                        this.addToast('A nova senha não pode ser vazia!', 'error');
-                        return;
-                    }
-                    const usr = this.users.find(u => u.id === this.changePasswordForm.userId);
-                    if (usr) {
-                        usr.password = String(this.changePasswordForm.newPassword).trim();
-                        this.users = [...this.users];
-                        this.saveUsers();
-                        this.addLog('UPDATE', `Alterou a senha do usuário ${usr.username}.`);
-                        this.addToast(`Senha do usuário ${usr.username} redefinida com sucesso!`, 'success');
-                        this.changePasswordModalOpen = false;
-                        this.autoSaveDriveCloud();
-                    }
-                },
-
                 submitVlanForm() {
                     if (this.currentUser.role === 'read') return;
                     const idInt = parseInt(this.vlanForm.id);
@@ -2243,15 +2089,14 @@ function doPost(e) {
                 },
 
                 submitUserForm() {
-                    const cleanUsername = this.userForm.username.trim();
-                    if (this.users.some(u => u.username && u.username.toLowerCase() === cleanUsername.toLowerCase())) {
+                    if (this.users.some(u => u.username.toLowerCase() === this.userForm.username.toLowerCase().trim())) {
                         this.addToast('Nome de usuário já existe.', 'error');
                         return;
                     }
                     const newUser = {
                         id: Date.now(),
-                        username: cleanUsername,
-                        password: String(this.userForm.password).trim(), // Proteção contra números puros
+                        username: this.userForm.username.trim(),
+                        password: this.userForm.password,
                         role: this.userForm.role
                     };
                     this.users.push(newUser);
@@ -2514,7 +2359,10 @@ function doPost(e) {
                 restoreGoogleSheetsConfig() {
                     const savedConfig = localStorage.getItem('netmap_gs_config');
                     if (savedConfig) {
-                        this.gsConfig = JSON.parse(savedConfig);
+                        const parsed = JSON.parse(savedConfig);
+                        if (parsed && parsed.webAppUrl) {
+                            this.gsConfig.webAppUrl = parsed.webAppUrl;
+                        }
                     }
                     const savedSyncState = localStorage.getItem('netmap_gs_sync');
                     if (savedSyncState) {
@@ -2533,7 +2381,7 @@ function doPost(e) {
 
                 // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
                 async testSheetsConnection() {
-                    if (!this.gsConfig.webAppUrl) {
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
                         this.addToast('Defina a URL do seu Web App nas configurações!', 'error');
                         return;
                     }
@@ -2547,8 +2395,8 @@ function doPost(e) {
                             
                             const data = await res.json();
                             if (data && Object.keys(data).length > 0 && (data.devices || data.vlans)) {
-                                this.applyCloudDb(data, false); // merge seguro padrão
-                                this.addToast('Sincronizado! Dados unificados e recuperados do Google Sheets.', 'success');
+                                this.applyCloudDb(data);
+                                this.addToast('Sincronizado! Dados recuperados do Google Sheets.', 'success');
                                 this.addLog('SYNC', 'Conexão ativa com o Google Sheets Web App.');
                             } else {
                                 this.addToast('Conectado! Sincronizando banco local com a planilha vazia...', 'warning');
@@ -2566,7 +2414,7 @@ function doPost(e) {
 
                 // ENVIAR DADOS DO APLICATIVO PARA O GOOGLE SHEETS
                 async saveToGoogleSheets() {
-                    if (!this.gsConfig.webAppUrl) return;
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
                     
                     const dbData = {
                         vlans: this.vlans,
@@ -2591,6 +2439,8 @@ function doPost(e) {
                             this.gsSync.lastSynced = this.getCurrentTime();
                             this.gsSync.status = 'online';
                             localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
+                            this.addToast('Google Sheets atualizado com sucesso!', 'success');
+                            this.addLog('SYNC', 'Sincronizou banco local com o Google Sheets Web App.');
                         } else {
                             throw new Error('Falha no upload.');
                         }
@@ -2599,102 +2449,37 @@ function doPost(e) {
                         this.gsSync.lastSynced = this.getCurrentTime();
                         this.gsSync.status = 'online';
                         localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-                    }
-                },
-
-                // WRAPPERS CONSCIENTES DE SINC MANUAL (Com alerta antes de sobrescrever)
-                async manualSaveToGoogleSheets() {
-                    if (this.currentUser.role === 'read') return;
-                    const confirm = await this.openConfirm(
-                        'Enviar para o Sheets (Backup)', 
-                        'Atenção: Isso substituirá integralmente todos os dados salvos na nuvem pelo seu banco de dados local atual. Deseja continuar?'
-                    );
-                    if (confirm) {
-                        this.addToast('Enviando dados...', 'warning');
-                        await this.saveToGoogleSheets();
-                        this.addToast('Backup concluído com sucesso!', 'success');
-                        this.addLog('SYNC', 'Sobrescrita manual executada (Backup local -> Nuvem).');
-                    }
-                },
-
-                async manualLoadFromGoogleSheets() {
-                    const confirm = await this.openConfirm(
-                        'Puxar do Sheets (Restaurar)', 
-                        'Atenção: Isso substituirá COMPLETAMENTE todos os seus computadores, VLANs, switches e usuários locais pelos dados salvos no Google Sheets. Deseja prosseguir?'
-                    );
-                    if (confirm) {
-                        this.addToast('Baixando dados...', 'warning');
-                        await this.loadFromGoogleSheets(false, true); // Força sobrescrita total local
-                        this.addToast('Restauração de nuvem concluída com sucesso!', 'success');
-                        this.addLog('SYNC', 'Restauração manual executada (Nuvem -> Local).');
+                        this.addToast('Dados atualizados na nuvem!', 'success');
                     }
                 },
 
                 // ATUALIZAR INTERFACE COM OS DADOS CARREGADOS
-                async loadFromGoogleSheets(isInitial = false, isForceOverwrite = false) {
-                    if (!this.gsConfig.webAppUrl) return;
+                async loadFromGoogleSheets() {
+                    if (!this.gsConfig.webAppUrl || this.gsConfig.webAppUrl === 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') return;
                     try {
                         const response = await fetch(this.gsConfig.webAppUrl);
                         if (!response.ok) throw new Error('Não pôde baixar.');
                         const cloudDb = await response.json();
                         
-                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans || cloudDb.users)) {
-                            this.applyCloudDb(cloudDb, isForceOverwrite);
+                        if (cloudDb && Object.keys(cloudDb).length > 0 && (cloudDb.devices || cloudDb.vlans)) {
+                            this.applyCloudDb(cloudDb);
                             this.gsSync.status = 'online';
                             this.gsSync.lastSynced = this.getCurrentTime();
                             localStorage.setItem('netmap_gs_sync', JSON.stringify(this.gsSync));
-
-                            // Se for inicial e tivermos novos usuários locais unificados, empurramos de volta para atualizar a nuvem
-                            if (isInitial && this.currentUser.role !== 'read') {
-                                await this.saveToGoogleSheets();
-                            }
                         }
                     } catch(e) {
-                        console.error("Falha ao obter banco remoto:", e);
+                        console.error("Falha silenciosa ao obter banco remoto no boot:", e);
                     }
                 },
 
-                applyCloudDb(cloudDb, isForceOverwrite = false) {
+                applyCloudDb(cloudDb) {
                     if (!cloudDb) return;
-                    if (cloudDb.vlans && Array.isArray(cloudDb.vlans)) this.vlans = cloudDb.vlans;
-                    if (cloudDb.switches && Array.isArray(cloudDb.switches)) this.switches = cloudDb.switches;
-                    if (cloudDb.devices && Array.isArray(cloudDb.devices)) this.devices = cloudDb.devices;
-                    if (cloudDb.outlets && Array.isArray(cloudDb.outlets)) this.outlets = cloudDb.outlets;
-                    
-                    // Tratamento Inteligente de Sincronização de Usuários (Evita apagamentos em cascata)
-                    if (cloudDb.users && Array.isArray(cloudDb.users)) {
-                        const remoteUsers = cloudDb.users.map(u => ({
-                            ...u,
-                            password: String(u.password).trim() // Limpa tipo numérico vindo do Sheets
-                        }));
-
-                        if (isForceOverwrite) {
-                            // Sobrescrita manual absoluta solicitada pelo operador
-                            this.users = remoteUsers;
-                        } else {
-                            // Sincronização silenciosa (Merge de segurança anti-perda)
-                            const merged = [...this.users];
-                            remoteUsers.forEach(remote => {
-                                const localIndex = merged.findIndex(l => l.username && remote.username && l.username.trim().toLowerCase() === remote.username.trim().toLowerCase());
-                                if (localIndex === -1) {
-                                    // Novo usuário da nuvem que não temos localmente, adicionamos
-                                    merged.push(remote);
-                                } else {
-                                    // Se já temos localmente, atualizamos os dados para alinhar privilégios ou senhas novas
-                                    merged[localIndex] = { ...merged[localIndex], ...remote };
-                                }
-                            });
-                            this.users = merged;
-                        }
-
-                        // Garante sempre o admin no topo
-                        const hasAdmin = this.users.some(u => u.username && u.username.trim().toLowerCase() === 'admin');
-                        if (!hasAdmin) {
-                            this.users.unshift({ id: 1, username: "admin", password: "admin", role: "admin" });
-                        }
-                    }
-                    
-                    if (cloudDb.logs && Array.isArray(cloudDb.logs)) this.logs = cloudDb.logs;
+                    if (cloudDb.vlans) this.vlans = cloudDb.vlans;
+                    if (cloudDb.switches) this.switches = cloudDb.switches;
+                    if (cloudDb.devices) this.devices = cloudDb.devices;
+                    if (cloudDb.outlets) this.outlets = cloudDb.outlets;
+                    if (cloudDb.users) this.users = cloudDb.users;
+                    if (cloudDb.logs) this.logs = cloudDb.logs;
 
                     this.saveVlans();
                     this.saveSwitches();
@@ -2704,7 +2489,7 @@ function doPost(e) {
                     this.saveLogs();
                 },
 
-                // Salva automaticamente com DEBOUNCE (Evita travamentos e sobrecarga de requisições)
+                // Salva automaticamente com DEBOUNCE (Muito importante para evitar travamentos e limites de requisições do Google)
                 async autoSaveDriveCloud() {
                     if (this.gsSync.status === 'online' && this.currentUser.role !== 'read') {
                         if (this.autoSaveTimeout) {
@@ -2712,7 +2497,7 @@ function doPost(e) {
                         }
                         this.autoSaveTimeout = setTimeout(async () => {
                             await this.saveToGoogleSheets();
-                        }, 2000); 
+                        }, 2000); // Aguarda 2 segundos de inatividade após qualquer alteração para sincronizar
                     }
                 },
 
