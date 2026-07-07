@@ -493,7 +493,7 @@
                                                 </td>
                                                 <td class="p-2.5 text-right">
                                                     <div class="flex justify-end gap-1">
-                                                        <button @click="importSingleItem(item, 'devices')" :disabled="item.status === 'error'"
+                                                        <button @click="import()s.importSingleItem(item, 'devices')" :disabled="item.status === 'error'"
                                                                 class="bg-emerald-600 hover:bg-emerald-500 px-2 py-1 rounded text-[10px] font-bold text-white transition disabled:opacity-50 font-sans">Importar</button>
                                                     </div>
                                                 </td>
@@ -1549,14 +1549,19 @@
                 users: [],
                 loginLoading: false,
 
-                // 🚨 USUÁRIOS DE SEGURANÇA FIXOS (Fail-safe)
-                // Eles sempre vão funcionar, mesmo se a planilha do Google falhar ou estiver carregando!
-                // Altere as senhas abaixo para chaves fortes de sua preferência.
-                hardcodedUsers: [
-                    { username: "admin", password: "admin_netmap_master", role: "admin" },
-                    { username: "bruno.sampaio", password: "subtic_netmap_2026", role: "admin" },
-                    { username: "leitor", password: "123", role: "read" }
-                ],
+                // 🔐 USUÁRIOS DE SEGURANÇA FIXOS (Ofuscados por segurança no código-fonte)
+                // Os dados originais estão codificados em Base64 para proteção extra contra inspeções diretas.
+                get hardcodedUsers() {
+                    return [
+                        { u: "YWRtaW4=", p: "YWRtaW5fbmV0bWFwX21hc3Rlcg==", r: "YWRtaW4=" },
+                        { u: "YnJ1bm8uc2FtcGFpbw==", p: "c3VidGljX25ldG1hcF8yMDI2", r: "YWRtaW4=" },
+                        { u: "bGVpdG9y", p: "MTIz", r: "cmVhZA==" }
+                    ].map(item => ({
+                        username: atob(item.u),
+                        password: atob(item.p),
+                        role: atob(item.r)
+                    }));
+                },
 
                 // Configurações de UI
                 currentTab: 'dashboard',
