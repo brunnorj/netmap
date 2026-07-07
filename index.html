@@ -949,7 +949,7 @@
                         <!-- Prévia de Itens Importáveis para Tomadas -->
                         <div x-show="parsedImportItems.length > 0 && localImportPanel === 'outlets'" class="border-t border-slate-800 pt-4 space-y-4" x-cloak>
                             <div class="flex justify-between items-center">
-                                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300">Visualizar e Importar Tomadas:</h4>
+                                <h4 class="text-xs font-bold uppercase tracking-wider text-slate-300 font-sans">Visualizar e Importar Tomadas:</h4>
                                 <button @click="importAllParsed('outlets')" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-3 py-1.5 rounded font-bold transition font-sans">
                                     ⚡ Importar Todos os Válidos
                                 </button>
@@ -1833,8 +1833,8 @@
                     return match ? match.subnet : 'N/A';
                 },
                 getVlanGateway(id) {
-                    const match = this.vlans.find(v => v.id === parseInt(vlanId)); // Corrigido escopo
                     const safeId = id || this.selectedVlanId;
+                    if (!safeId) return 'N/A';
                     const v = this.vlans.find(v => v.id === parseInt(safeId));
                     return v ? v.gateway : 'N/A';
                 },
@@ -2394,23 +2394,36 @@
 
                 // RESTAURAÇÃO E SALVAMENTO DE CONFIGURAÇÕES DO GOOGLE SHEETS
                 restoreGoogleSheetsConfig() {
-                    const savedConfig = localStorage.getItem('netmap_gs_config');
-                    if (savedConfig) {
-                        const parsed = JSON.parse(savedConfig);
-                        // Correção para ignorar lixo de cache/localstorage antigo e priorizar a URL válida definida diretamente no código
-                        if (parsed && parsed.webAppUrl && parsed.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && parsed.webAppUrl.trim() !== '') {
-                            this.gsConfig.webAppUrl = parsed.webAppUrl;
+                    const hardcodedUrl = 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec';
+                    let activeUrl = hardcodedUrl;
+
+                    try {
+                        const savedConfig = localStorage.getItem('netmap_gs_config');
+                        if (savedConfig) {
+                            let parsedUrl = '';
+                            if (savedConfig.startsWith('{')) {
+                                const parsed = JSON.parse(savedConfig);
+                                parsedUrl = parsed ? parsed.webAppUrl : '';
+                            } else if (savedConfig.startsWith('http')) {
+                                parsedUrl = savedConfig;
+                            }
+
+                            // Só aceita a URL do localStorage se ela for preenchida, não-padrão e diferente de lixo
+                            if (parsedUrl && parsedUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && parsedUrl.trim() !== '') {
+                                activeUrl = parsedUrl;
+                            }
                         }
+                    } catch (e) {
+                        console.error("Erro ao processar as configurações do local storage:", e);
                     }
 
-                    // Se a URL definida no código for válida, força a atualização no LocalStorage para sincronizar o navegador de todos
-                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && this.gsConfig.webAppUrl.trim() !== '') {
-                        localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
-                    }
-
-                    const savedSyncState = localStorage.getItem('netmap_gs_sync');
-                    if (savedSyncState) {
-                        this.gsSync = JSON.parse(savedSyncState);
+                    // Se a URL final calculada for válida, configura no estado interno e garante sua atualização no LocalStorage
+                    if (activeUrl && activeUrl !== 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' && activeUrl.trim() !== '') {
+                        this.gsConfig.webAppUrl = activeUrl;
+                        localStorage.setItem('netmap_gs_config', JSON.stringify({ webAppUrl: activeUrl }));
+                    } else {
+                        this.gsConfig.webAppUrl = '';
+                        localStorage.removeItem('netmap_gs_config');
                     }
                 },
 
@@ -2420,7 +2433,7 @@
                         return;
                     }
                     localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
-                    this.addToast('Endereço do Google Sheets updated!', 'success');
+                    this.addToast('Endereço do Google Sheets atualizado com sucesso!', 'success');
                 },
 
                 // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
