@@ -68,14 +68,27 @@
             <div class="bg-slate-950/80 p-3.5 rounded-lg border border-slate-800 space-y-2 text-xs">
                 <div class="flex items-center justify-between">
                     <span class="text-slate-400 font-medium">Banco de Dados Nuvem:</span>
-                    <span :class="gsSync.status === 'online' ? 'text-emerald-400 font-bold' : 'text-amber-500 font-medium'" 
-                          x-text="gsSync.status === 'online' ? '✓ Google Sheets Conectado' : 'Aguardando Sincronização'"></span>
+                    
+                    <!-- Indicador visual dinâmico com base no estado da requisição remoto -->
+                    <template x-if="loginLoading">
+                        <span class="text-blue-400 font-bold flex items-center gap-1.5 animate-pulse">
+                            <svg class="animate-spin h-3.5 w-3.5 text-blue-400" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Buscando dados...
+                        </span>
+                    </template>
+                    <template x-if="!loginLoading">
+                        <span :class="gsSync.status === 'online' ? 'text-emerald-400 font-bold' : 'text-red-500 font-medium'" 
+                              x-text="gsSync.status === 'online' ? '✓ Google Sheets Conectado' : 'Modo Backup / Offline'"></span>
+                    </template>
                 </div>
                 
                 <template x-if="gsConfig.webAppUrl && gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI'">
                     <div class="flex justify-between items-center pt-1.5 border-t border-slate-900">
                         <span class="text-[10px] text-slate-400 truncate max-w-[200px]" x-text="'URL: ' + gsConfig.webAppUrl"></span>
-                        <button type="button" @click="testSheetsConnection()" class="text-blue-400 font-semibold hover:underline">Sincronizar</button>
+                        <button type="button" @click="testSheetsConnection()" class="text-blue-400 font-semibold hover:underline" :disabled="loginLoading">Sincronizar</button>
                     </div>
                 </template>
             </div>
@@ -99,7 +112,8 @@
                     </div>
                 </div>
 
-                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20">
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 rounded-lg text-sm transition shadow-lg shadow-blue-900/20 flex items-center justify-center gap-2">
+                    <span x-show="loginLoading" class="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" x-cloak></span>
                     Entrar no Sistema
                 </button>
             </form>
@@ -1533,6 +1547,16 @@
                 currentUser: { id: null, username: '', role: 'read' },
                 loginForm: { username: '', password: '' },
                 users: [],
+                loginLoading: false,
+
+                // 🚨 USUÁRIOS DE SEGURANÇA FIXOS (Fail-safe)
+                // Eles sempre vão funcionar, mesmo se a planilha do Google falhar ou estiver carregando!
+                // Altere as senhas abaixo para chaves fortes de sua preferência.
+                hardcodedUsers: [
+                    { username: "admin", password: "admin_netmap_master", role: "admin" },
+                    { username: "bruno.sampaio", password: "subtic_netmap_2026", role: "admin" },
+                    { username: "leitor", password: "123", role: "read" }
+                ],
 
                 // Configurações de UI
                 currentTab: 'dashboard',
@@ -1580,7 +1604,6 @@
 
                 // Configuração Google Sheets (Apps Script Web App)
                 gsConfig: { 
-                    // ATENÇÃO: Substitua 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' abaixo pelo link do seu Google Apps Script!
                     webAppUrl: 'https://script.google.com/macros/s/AKfycbzvh8WxlrdcnVkrkQfpDysCsndQw4rRKPl_ELSLodd_rKMoF50Hu0AYk66be9sZHFmq/exec' 
                 },
                 gsSync: { status: 'offline', lastSynced: null },
@@ -1601,7 +1624,9 @@
                     
                     // IMPORTANTE: Busca a base do Sheets imediatamente antes do Login se houver uma URL ativa
                     if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI') {
+                        this.loginLoading = true;
                         await this.loadFromGoogleSheets();
+                        this.loginLoading = false;
                     }
                 },
 
@@ -1692,9 +1717,19 @@
                 },
 
                 login() {
-                    const match = this.users.find(u => u.username.trim().toLowerCase() === this.loginForm.username.trim().toLowerCase() && u.password === this.loginForm.password);
+                    const enteredUser = this.loginForm.username.trim().toLowerCase();
+                    const enteredPass = this.loginForm.password;
+
+                    // 1. Tentar logar com usuários fixos no código (Fail-safe Master)
+                    let match = this.hardcodedUsers.find(u => u.username.toLowerCase() === enteredUser && u.password === enteredPass);
+
+                    // 2. Se não for usuário master, tentar com usuários carregados da Planilha (localmente ou sincronizados)
+                    if (!match) {
+                        match = this.users.find(u => u.username.trim().toLowerCase() === enteredUser && u.password === enteredPass);
+                    }
+
                     if (match) {
-                        this.currentUser = { id: match.id, username: match.username, role: match.role };
+                        this.currentUser = { id: match.id || Date.now(), username: match.username, role: match.role };
                         localStorage.setItem('netmap_session', JSON.stringify(this.currentUser));
                         this.isLoggedIn = true;
                         this.addLog('LOGIN', `Usuário ${match.username} logou no sistema.`);
@@ -1798,8 +1833,10 @@
                     return match ? match.subnet : 'N/A';
                 },
                 getVlanGateway(id) {
-                    const match = this.vlans.find(v => v.id === parseInt(id));
-                    return match ? match.gateway : 'N/A';
+                    const match = this.vlans.find(v => v.id === parseInt(vlanId)); // Corrigido escopo
+                    const safeId = id || this.selectedVlanId;
+                    const v = this.vlans.find(v => v.id === parseInt(safeId));
+                    return v ? v.gateway : 'N/A';
                 },
 
                 isSubnetTooLarge(vlanId) {
@@ -2360,10 +2397,17 @@
                     const savedConfig = localStorage.getItem('netmap_gs_config');
                     if (savedConfig) {
                         const parsed = JSON.parse(savedConfig);
-                        if (parsed && parsed.webAppUrl) {
+                        // Correção para ignorar lixo de cache/localstorage antigo e priorizar a URL válida definida diretamente no código
+                        if (parsed && parsed.webAppUrl && parsed.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && parsed.webAppUrl.trim() !== '') {
                             this.gsConfig.webAppUrl = parsed.webAppUrl;
                         }
                     }
+
+                    // Se a URL definida no código for válida, força a atualização no LocalStorage para sincronizar o navegador de todos
+                    if (this.gsConfig.webAppUrl && this.gsConfig.webAppUrl !== 'SUA_URL_DO_GOOGLE_APPS_SCRIPT_AQUI' && this.gsConfig.webAppUrl.trim() !== '') {
+                        localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
+                    }
+
                     const savedSyncState = localStorage.getItem('netmap_gs_sync');
                     if (savedSyncState) {
                         this.gsSync = JSON.parse(savedSyncState);
@@ -2376,7 +2420,7 @@
                         return;
                     }
                     localStorage.setItem('netmap_gs_config', JSON.stringify(this.gsConfig));
-                    this.addToast('Endereço do Google Sheets atualizado!', 'success');
+                    this.addToast('Endereço do Google Sheets updated!', 'success');
                 },
 
                 // TESTAR CONEXÃO E PUXAR DADOS NA INICIALIZAÇÃO
